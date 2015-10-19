@@ -94,7 +94,7 @@ func Comparable(T Type) bool {
 		}
 		return true
 	case *Array:
-		return Comparable(t.elem)
+		return Comparable(t.Elem())
 	}
 	return false
 }
@@ -143,13 +143,13 @@ func identical(x, y Type, p *ifacePair) bool {
 		// Two array types are identical if they have identical element types
 		// and the same array length.
 		if y, ok := y.(*Array); ok {
-			return x.len == y.len && identical(x.elem, y.elem, p)
+			return x.len == y.len && identical(x.Elem(), y.Elem(), p)
 		}
 
 	case *Slice:
 		// Two slice types are identical if they have identical element types.
 		if y, ok := y.(*Slice); ok {
-			return identical(x.elem, y.elem, p)
+			return identical(x.Elem(), y.Elem(), p)
 		}
 
 	case *Struct:
@@ -175,7 +175,7 @@ func identical(x, y Type, p *ifacePair) bool {
 	case *Pointer:
 		// Two pointer types are identical if they have identical base types.
 		if y, ok := y.(*Pointer); ok {
-			return identical(x.base, y.base, p)
+			return identical(x.Elem(), y.Elem(), p)
 		}
 
 	case *Tuple:
@@ -260,14 +260,14 @@ func identical(x, y Type, p *ifacePair) bool {
 	case *Map:
 		// Two map types are identical if they have identical key and value types.
 		if y, ok := y.(*Map); ok {
-			return identical(x.key, y.key, p) && identical(x.elem, y.elem, p)
+			return identical(x.Key(), y.Key(), p) && identical(x.Elem(), y.Elem(), p)
 		}
 
 	case *Chan:
 		// Two channel types are identical if they have identical value types
 		// and the same direction.
 		if y, ok := y.(*Chan); ok {
-			return x.dir == y.dir && identical(x.elem, y.elem, p)
+			return x.dir == y.dir && identical(x.Elem(), y.Elem(), p)
 		}
 
 	case *Named:

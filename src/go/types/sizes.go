@@ -52,7 +52,7 @@ func (s *StdSizes) Alignof(T Type) int64 {
 	case *Array:
 		// spec: "For a variable x of array type: unsafe.Alignof(x)
 		// is the same as unsafe.Alignof(x[0]), but at least 1."
-		return s.Alignof(t.elem)
+		return s.Alignof(t.Elem())
 	case *Struct:
 		// spec: "For a variable x of struct type: unsafe.Alignof(x)
 		// is the largest of the values unsafe.Alignof(x.f) for each
@@ -122,8 +122,8 @@ func (s *StdSizes) Sizeof(T Type) int64 {
 		if n == 0 {
 			return 0
 		}
-		a := s.Alignof(t.elem)
-		z := s.Sizeof(t.elem)
+		a := s.Alignof(t.Elem())
+		z := s.Sizeof(t.Elem())
 		return align(z, a)*(n-1) + z
 	case *Slice:
 		return s.WordSize * 3

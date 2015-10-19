@@ -292,7 +292,7 @@ func assertableTo(V *Interface, T Type) (method *Func, wrongType bool) {
 // Otherwise it returns (typ, false).
 func deref(typ Type) (Type, bool) {
 	if p, _ := typ.(*Pointer); p != nil {
-		return p.base, true
+		return p.Elem(), true
 	}
 	return typ, false
 }
@@ -301,8 +301,8 @@ func deref(typ Type) (Type, bool) {
 // (named or unnamed) struct and returns its base. Otherwise it returns typ.
 func derefStructPtr(typ Type) Type {
 	if p, _ := typ.Underlying().(*Pointer); p != nil {
-		if _, ok := p.base.Underlying().(*Struct); ok {
-			return p.base
+		if _, ok := p.Elem().Underlying().(*Struct); ok {
+			return p.Elem()
 		}
 	}
 	return typ

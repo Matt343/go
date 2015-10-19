@@ -80,7 +80,7 @@ func (x *operand) convertibleTo(conf *Config, T Type) bool {
 	// "x's type and T are unnamed pointer types and their pointer base types have identical underlying types"
 	if V, ok := V.(*Pointer); ok {
 		if T, ok := T.(*Pointer); ok {
-			if Identical(V.base.Underlying(), T.base.Underlying()) {
+			if Identical(V.Elem().Underlying(), T.Elem().Underlying()) {
 				return true
 			}
 		}
@@ -139,7 +139,7 @@ func isPointer(typ Type) bool {
 
 func isBytesOrRunes(typ Type) bool {
 	if s, ok := typ.(*Slice); ok {
-		t, ok := s.elem.Underlying().(*Basic)
+		t, ok := s.Elem().Underlying().(*Basic)
 		return ok && (t.kind == Byte || t.kind == Rune)
 	}
 	return false

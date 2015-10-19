@@ -269,7 +269,7 @@ func (x *operand) assignableTo(conf *Config, T Type, reason *string) bool {
 	// type, x's type V and T have identical element types,
 	// and at least one of V or T is not a named type
 	if Vc, ok := Vu.(*Chan); ok && Vc.dir == SendRecv {
-		if Tc, ok := Tu.(*Chan); ok && Identical(Vc.elem, Tc.elem) {
+		if Tc, ok := Tu.(*Chan); ok && Identical(Vc.Elem(), Tc.Elem()) {
 			return !isNamed(V) || !isNamed(T)
 		}
 	}

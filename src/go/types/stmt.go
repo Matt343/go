@@ -333,7 +333,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			return
 		}
 
-		check.assignment(&x, tch.elem, "send")
+		check.assignment(&x, tch.Elem(), "send")
 
 	case *ast.IncDecStmt:
 		var op token.Token
@@ -705,20 +705,20 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				}
 			case *Array:
 				key = Typ[Int]
-				val = typ.elem
+				val = typ.Elem()
 			case *Slice:
 				key = Typ[Int]
-				val = typ.elem
+				val = typ.Elem()
 			case *Pointer:
-				if typ, _ := typ.base.Underlying().(*Array); typ != nil {
+				if typ, _ := typ.Elem().Underlying().(*Array); typ != nil {
 					key = Typ[Int]
-					val = typ.elem
+					val = typ.Elem()
 				}
 			case *Map:
-				key = typ.key
-				val = typ.elem
+				key = typ.Key()
+				val = typ.Elem()
 			case *Chan:
-				key = typ.elem
+				key = typ.Elem()
 				val = Typ[Invalid]
 				if typ.dir == SendOnly {
 					check.errorf(x.pos(), "cannot range over send-only channel %s", &x)

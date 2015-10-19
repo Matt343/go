@@ -92,31 +92,57 @@ func (b *Basic) Info() BasicInfo { return b.info }
 // Name returns the name of basic type b.
 func (b *Basic) Name() string { return b.name }
 
+// A GenericType is parameterized by one or more other types.
+type GenericType struct {
+	parameterTypes []Type
+}
+
+// NewGenericType returns a new generic type for the given parameter types
+func NewGenericType(types ...Type) *GenericType {
+	return &GenericType{types}
+}
+
+// NumParameters is the number of parameter types.
+func (g *GenericType) NumParameters() int {
+	return len(g.parameterTypes)
+}
+
+// ParameterType returns the i'th parameter type for 0 <= i < NumParameters().
+func (g *GenericType) ParameterType(i int) Type {
+	return g.parameterTypes[i]
+}
+
+// SetParameterTypes is a convenience method to set all of the
+// parameter types of a generic type at once.
+func (g *GenericType) SetParameterTypes(types ...Type) {
+	g.parameterTypes = types
+}
+
 // An Array represents an array type.
 type Array struct {
-	len  int64
-	elem Type
+	len int64
+	GenericType
 }
 
 // NewArray returns a new array type for the given element type and length.
-func NewArray(elem Type, len int64) *Array { return &Array{len, elem} }
+func NewArray(elem Type, len int64) *Array { return &Array{len, *NewGenericType(elem)} }
 
 // Len returns the length of array a.
 func (a *Array) Len() int64 { return a.len }
 
 // Elem returns element type of array a.
-func (a *Array) Elem() Type { return a.elem }
+func (a *Array) Elem() Type { return a.ParameterType(0) }
 
 // A Slice represents a slice type.
 type Slice struct {
-	elem Type
+	GenericType
 }
 
 // NewSlice returns a new slice type for the given element type.
-func NewSlice(elem Type) *Slice { return &Slice{elem} }
+func NewSlice(elem Type) *Slice { return &Slice{*NewGenericType(elem)} }
 
 // Elem returns the element type of slice s.
-func (s *Slice) Elem() Type { return s.elem }
+func (s *Slice) Elem() Type { return s.ParameterType(0) }
 
 // A Struct represents a struct type.
 type Struct struct {
@@ -159,14 +185,14 @@ func (s *Struct) Tag(i int) string {
 
 // A Pointer represents a pointer type.
 type Pointer struct {
-	base Type // element type
+	GenericType
 }
 
 // NewPointer returns a new pointer type for the given element (base) type.
-func NewPointer(elem Type) *Pointer { return &Pointer{base: elem} }
+func NewPointer(elem Type) *Pointer { return &Pointer{*NewGenericType(elem)} }
 
 // Elem returns the element type for the given pointer p.
-func (p *Pointer) Elem() Type { return p.base }
+func (p *Pointer) Elem() Type { return p.ParameterType(0) }
 
 // A Tuple represents an ordered list of variables; a nil *Tuple is a valid (empty) tuple.
 // Tuples are used as components of signatures and to represent the type of multiple
@@ -337,24 +363,24 @@ func (t *Interface) Complete() *Interface {
 
 // A Map represents a map type.
 type Map struct {
-	key, elem Type
+	GenericType
 }
 
 // NewMap returns a new map for the given key and element types.
 func NewMap(key, elem Type) *Map {
-	return &Map{key, elem}
+	return &Map{*NewGenericType(key, elem)}
 }
 
 // Key returns the key type of map m.
-func (m *Map) Key() Type { return m.key }
+func (m *Map) Key() Type { return m.ParameterType(0) }
 
 // Elem returns the element type of map m.
-func (m *Map) Elem() Type { return m.elem }
+func (m *Map) Elem() Type { return m.ParameterType(1) }
 
 // A Chan represents a channel type.
 type Chan struct {
-	dir  ChanDir
-	elem Type
+	dir ChanDir
+	GenericType
 }
 
 // A ChanDir value indicates a channel direction.
@@ -369,14 +395,14 @@ const (
 
 // NewChan returns a new channel type for the given direction and element type.
 func NewChan(dir ChanDir, elem Type) *Chan {
-	return &Chan{dir, elem}
+	return &Chan{dir, *NewGenericType(elem)}
 }
 
 // Dir returns the direction of channel c.
 func (c *Chan) Dir() ChanDir { return c.dir }
 
 // Elem returns the element type of channel c.
-func (c *Chan) Elem() Type { return c.elem }
+func (c *Chan) Elem() Type { return c.ParameterType(0) }
 
 // A Named represents a named type.
 type Named struct {

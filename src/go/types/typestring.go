@@ -108,11 +108,11 @@ func writeType(buf *bytes.Buffer, typ Type, qf Qualifier, visited []Type) {
 
 	case *Array:
 		fmt.Fprintf(buf, "[%d]", t.len)
-		writeType(buf, t.elem, qf, visited)
+		writeType(buf, t.Elem(), qf, visited)
 
 	case *Slice:
 		buf.WriteString("[]")
-		writeType(buf, t.elem, qf, visited)
+		writeType(buf, t.Elem(), qf, visited)
 
 	case *Struct:
 		buf.WriteString("struct{")
@@ -133,7 +133,7 @@ func writeType(buf *bytes.Buffer, typ Type, qf Qualifier, visited []Type) {
 
 	case *Pointer:
 		buf.WriteByte('*')
-		writeType(buf, t.base, qf, visited)
+		writeType(buf, t.Elem(), qf, visited)
 
 	case *Tuple:
 		writeTuple(buf, t, false, qf, visited)
@@ -185,9 +185,9 @@ func writeType(buf *bytes.Buffer, typ Type, qf Qualifier, visited []Type) {
 
 	case *Map:
 		buf.WriteString("map[")
-		writeType(buf, t.key, qf, visited)
+		writeType(buf, t.Key(), qf, visited)
 		buf.WriteByte(']')
-		writeType(buf, t.elem, qf, visited)
+		writeType(buf, t.Elem(), qf, visited)
 
 	case *Chan:
 		var s string
@@ -196,7 +196,7 @@ func writeType(buf *bytes.Buffer, typ Type, qf Qualifier, visited []Type) {
 		case SendRecv:
 			s = "chan "
 			// chan (<-chan T) requires parentheses
-			if c, _ := t.elem.(*Chan); c != nil && c.dir == RecvOnly {
+			if c, _ := t.Elem().(*Chan); c != nil && c.dir == RecvOnly {
 				parens = true
 			}
 		case SendOnly:
@@ -210,7 +210,7 @@ func writeType(buf *bytes.Buffer, typ Type, qf Qualifier, visited []Type) {
 		if parens {
 			buf.WriteByte('(')
 		}
-		writeType(buf, t.elem, qf, visited)
+		writeType(buf, t.Elem(), qf, visited)
 		if parens {
 			buf.WriteByte(')')
 		}
@@ -249,7 +249,7 @@ func writeTuple(buf *bytes.Buffer, tup *Tuple, variadic bool, qf Qualifier, visi
 			if variadic && i == len(tup.vars)-1 {
 				if s, ok := typ.(*Slice); ok {
 					buf.WriteString("...")
-					typ = s.elem
+					typ = s.Elem()
 				} else {
 					// special case:
 					// append(s, "foo"...) leads to signature func([]byte, string...)

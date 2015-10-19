@@ -254,13 +254,13 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 			typ := new(Array)
 			def.setUnderlying(typ)
 			typ.len = check.arrayLength(e.Len)
-			typ.elem = check.typExpr(e.Elt, nil, path)
+			typ.SetParameterTypes(check.typExpr(e.Elt, nil, path))
 			return typ
 
 		} else {
 			typ := new(Slice)
 			def.setUnderlying(typ)
-			typ.elem = check.typ(e.Elt)
+			typ.SetParameterTypes(check.typ(e.Elt))
 			return typ
 		}
 
@@ -273,7 +273,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 	case *ast.StarExpr:
 		typ := new(Pointer)
 		def.setUnderlying(typ)
-		typ.base = check.typ(e.X)
+		typ.SetParameterTypes(check.typ(e.X))
 		return typ
 
 	case *ast.FuncType:
@@ -292,8 +292,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		typ := new(Map)
 		def.setUnderlying(typ)
 
-		typ.key = check.typ(e.Key)
-		typ.elem = check.typ(e.Value)
+		typ.SetParameterTypes(check.typ(e.Key), check.typ(e.Value))
 
 		// spec: "The comparison operators == and != must be fully defined
 		// for operands of the key type; thus the key type must not be a
@@ -302,8 +301,8 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		// Delay this check because it requires fully setup types;
 		// it is safe to continue in any case (was issue 6667).
 		check.delay(func() {
-			if !Comparable(typ.key) {
-				check.errorf(e.Key.Pos(), "invalid map key type %s", typ.key)
+			if !Comparable(typ.Key()) {
+				check.errorf(e.Key.Pos(), "invalid map key type %s", typ.Key())
 			}
 		})
 
@@ -327,7 +326,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		}
 
 		typ.dir = dir
-		typ.elem = check.typ(e.Value)
+		typ.SetParameterTypes(check.typ(e.Value))
 		return typ
 
 	default:
@@ -434,7 +433,7 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 	// For a variadic function, change the last parameter's type from T to []T.
 	if variadic && len(params) > 0 {
 		last := params[len(params)-1]
-		last.typ = &Slice{elem: last.typ}
+		last.typ = NewSlice(last.typ)
 	}
 
 	return

@@ -257,7 +257,7 @@ func (check *Checker) argument(fun ast.Expr, sig *Signature, i int, x *operand, 
 		}
 	} else if sig.variadic && i >= n-1 {
 		// use the variadic parameter slice's element type
-		typ = typ.(*Slice).elem
+		typ = typ.(*Slice).Elem()
 	}
 
 	check.assignment(x, typ, check.sprintf("argument to %s", fun))
@@ -395,7 +395,7 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr) {
 					// Variables are addressable, so we can always take their
 					// address.
 					if _, ok := typ.(*Pointer); !ok && !IsInterface(typ) {
-						typ = &Pointer{base: typ}
+						typ = NewPointer(typ)
 					}
 				}
 				// If we created a synthetic pointer type above, we will throw

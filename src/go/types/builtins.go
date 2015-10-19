@@ -83,7 +83,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 		S := x.typ
 		var T Type
 		if s, _ := S.Underlying().(*Slice); s != nil {
-			T = s.elem
+			T = s.Elem()
 		} else {
 			check.invalidArg(x.pos(), "%s is not a slice", x)
 			return
@@ -295,7 +295,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 		// copy(x, y []T) int
 		var dst Type
 		if t, _ := x.typ.Underlying().(*Slice); t != nil {
-			dst = t.elem
+			dst = t.Elem()
 		}
 
 		var y operand
@@ -310,7 +310,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 				src = universeByte
 			}
 		case *Slice:
-			src = t.elem
+			src = t.Elem()
 		}
 
 		if dst == nil || src == nil {
@@ -341,14 +341,14 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 			return
 		}
 
-		if !x.assignableTo(check.conf, m.key, nil) {
-			check.invalidArg(x.pos(), "%s is not assignable to %s", x, m.key)
+		if !x.assignableTo(check.conf, m.Key(), nil) {
+			check.invalidArg(x.pos(), "%s is not assignable to %s", x, m.Key())
 			return
 		}
 
 		x.mode = novalue
 		if check.Types != nil {
-			check.recordBuiltinType(call.Fun, makeSig(nil, m, m.key))
+			check.recordBuiltinType(call.Fun, makeSig(nil, m, m.Key()))
 		}
 
 	case _Imag, _Real:
@@ -463,7 +463,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 		}
 
 		x.mode = value
-		x.typ = &Pointer{base: T}
+		x.typ = NewPointer(T)
 		if check.Types != nil {
 			check.recordBuiltinType(call.Fun, makeSig(x.typ, T))
 		}
@@ -648,7 +648,7 @@ func makeSig(res Type, args ...Type) *Signature {
 //
 func implicitArrayDeref(typ Type) Type {
 	if p, ok := typ.(*Pointer); ok {
-		if a, ok := p.base.Underlying().(*Array); ok {
+		if a, ok := p.Elem().Underlying().(*Array); ok {
 			return a
 		}
 	}
