@@ -84,6 +84,24 @@ func Walk(v Visitor, node Node) {
 			Walk(v, f)
 		}
 
+	case *ParameterType:
+		if n.Doc != nil {
+			Walk(v, n.Doc)
+		}
+		walkIdentList(v, n.Names)
+		Walk(v, n.TypeBound)
+		if n.Tag != nil {
+			Walk(v, n.Tag)
+		}
+		if n.Comment != nil {
+			Walk(v, n.Comment)
+		}
+
+	case *ParameterTypeList:
+		for _, t := range n.List {
+			Walk(v, t)
+		}
+
 	// Expressions
 	case *BadExpr, *Ident, *BasicLit:
 		// nothing to do
@@ -177,6 +195,10 @@ func Walk(v Visitor, node Node) {
 
 	case *ChanType:
 		Walk(v, n.Value)
+
+	case *GenericType:
+		Walk(v, n.Type)
+		walkExprList(v, n.ParameterTypes)
 
 	// Statements
 	case *BadStmt:

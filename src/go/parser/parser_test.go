@@ -90,6 +90,22 @@ func TestParseExpr(t *testing.T) {
 		t.Errorf("ParseExpr(%q): got %T, want *ast.StructType", src, x)
 	}
 
+	// a valid generic type expression
+	src = "b.(a<type1, type2<int>>)"
+	x, err = ParseExpr(src)
+	if err != nil {
+		t.Errorf("ParseExpr(%q%): %v", src, err)
+	}
+
+	// sanity check
+	if y, ok := x.(*ast.TypeAssertExpr); !ok {
+		t.Errorf("ParseExpr(%q) got %T, want *ast.TypeAssertExpr", src, x)
+	} else {
+		if _, ok := y.Type.(*ast.GenericType); !ok {
+			t.Errorf("ParseExpr(%q).Type got %T, want *ast.GenericType", src, y.Type)
+		}
+	}
+
 	// an invalid expression
 	src = "a + *"
 	if _, err := ParseExpr(src); err == nil {

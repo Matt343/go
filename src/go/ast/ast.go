@@ -222,6 +222,77 @@ func (f *FieldList) NumFields() int {
 	return n
 }
 
+// A ParameterType represents a parameter Type declaration in a generic function
+// signature or struct type.
+//
+type ParameterType struct {
+	Doc       *CommentGroup // associated documentation; or nil
+	Names     []*Ident      // parameter type names; non-nil
+	TypeBound Expr          // parameter type bound; non-nil
+	Tag       *BasicLit     // parameter type tag; or nil
+	Comment   *CommentGroup // line comments; or nil
+}
+
+func (p *ParameterType) Pos() token.Pos {
+	if len(p.Names) > 0 {
+		return p.Names[0].Pos()
+	}
+	return p.TypeBound.Pos()
+}
+
+func (p *ParameterType) End() token.Pos {
+	if p.Tag != nil {
+		return p.Tag.End()
+	}
+	return p.TypeBound.End()
+}
+
+// A ParameterTypeList represents a list of ParameterTypes, enclosed by braces.
+type ParameterTypeList struct {
+	Lbrack token.Pos        // position of opening brace
+	List   []*ParameterType // parameter type list; non-nil
+	Rbrack token.Pos        // position of closing brace
+}
+
+func (p *ParameterTypeList) Pos() token.Pos {
+	if p.Lbrack.IsValid() {
+		return p.Lbrack
+	}
+	// the list should not be empty in this case;
+	// be conservative and guard against bad ASTs
+	if len(p.List) > 0 {
+		return p.List[0].Pos()
+	}
+	return token.NoPos
+}
+
+func (p *ParameterTypeList) End() token.Pos {
+	if p.Rbrack.IsValid() {
+		return p.Rbrack + 1
+	}
+	// the list should not be empty in this case;
+	// be conservative and guard against bad ASTs
+	if n := len(p.List); n > 0 {
+		return p.List[n-1].End()
+	}
+	return token.NoPos
+}
+
+// NumParameterTypes returns the number of parameter types in a ParameterTypeList.
+func (p *ParameterTypeList) NumParameterTypes() int {
+	n := 0
+	if p != nil {
+		for _, q := range p.List {
+			m := len(q.Names)
+			if m == 0 {
+				m = 1 // anonymous field
+			}
+			n += m
+		}
+	}
+	return n
+}
+
 // An expression is represented by a tree consisting of one
 // or more of the following concrete expression nodes.
 //
@@ -415,6 +486,14 @@ type (
 		Dir   ChanDir   // channel direction
 		Value Expr      // value type
 	}
+
+	// A GenericType node represents a generic type.
+	GenericType struct {
+		Type           Expr      // parameterized type; non-nil
+		Lbrack         token.Pos // position of left bracket
+		ParameterTypes []Expr    // list of parameters types; non-nil
+		Rbrack         token.Pos // psoition of right bracket
+	}
 )
 
 // Pos and End implementations for expression/type nodes.
@@ -451,6 +530,7 @@ func (x *FuncType) Pos() token.Pos {
 func (x *InterfaceType) Pos() token.Pos { return x.Interface }
 func (x *MapType) Pos() token.Pos       { return x.Map }
 func (x *ChanType) Pos() token.Pos      { return x.Begin }
+func (x *GenericType) Pos() token.Pos   { return x.Type.Pos() }
 
 func (x *BadExpr) End() token.Pos { return x.To }
 func (x *Ident) End() token.Pos   { return token.Pos(int(x.NamePos) + len(x.Name)) }
@@ -484,6 +564,7 @@ func (x *FuncType) End() token.Pos {
 func (x *InterfaceType) End() token.Pos { return x.Methods.End() }
 func (x *MapType) End() token.Pos       { return x.Value.End() }
 func (x *ChanType) End() token.Pos      { return x.Value.End() }
+func (x *GenericType) End() token.Pos   { return x.Rbrack + 1 }
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
@@ -511,6 +592,7 @@ func (*FuncType) exprNode()      {}
 func (*InterfaceType) exprNode() {}
 func (*MapType) exprNode()       {}
 func (*ChanType) exprNode()      {}
+func (*GenericType) exprNode()   {}
 
 // ----------------------------------------------------------------------------
 // Convenience functions for Idents

@@ -613,44 +613,86 @@ func (p *parser) parseRhsList() []ast.Expr {
 // ----------------------------------------------------------------------------
 // Types
 
-func (p *parser) parseType() ast.Expr {
+func (p *parser) parseType(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
 	if p.trace {
 		defer un(trace(p, "Type"))
 	}
 
-	typ := p.tryType()
+	typ, shr = p.tryType(nestedGeneric)
 
 	if typ == nil {
 		pos := p.pos
 		p.errorExpected(pos, "type")
 		p.next() // make progress
-		return &ast.BadExpr{From: pos, To: p.pos}
+		typ = &ast.BadExpr{From: pos, To: p.pos}
 	}
 
-	return typ
+	return
 }
 
 // If the result is an identifier, it is not resolved.
-func (p *parser) parseTypeName() ast.Expr {
+func (p *parser) parseTypeName(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
 	if p.trace {
 		defer un(trace(p, "TypeName"))
 	}
 
-	ident := p.parseIdent()
+	shr = token.NoPos
+
+	typ = p.parseIdent()
 	// don't resolve ident yet - it may be a parameter or field name
 
 	if p.tok == token.PERIOD {
 		// ident is a package name
 		p.next()
-		p.resolve(ident)
+		p.resolve(typ)
 		sel := p.parseIdent()
-		return &ast.SelectorExpr{X: ident, Sel: sel}
+		typ = &ast.SelectorExpr{X: typ, Sel: sel}
 	}
 
-	return ident
+	if p.tok == token.LSS {
+		// parse type paramter list
+		lbrack := p.expect(token.LSS)
+		params, childShr := p.parseParameterTypeList()
+
+		var rbrack token.Pos
+
+		// parse closing >, allow >> if in nested generic type
+		if childShr.IsValid() {
+			rbrack = childShr
+		} else if nestedGeneric && p.tok == token.SHR {
+			shr = p.expect(token.SHR)
+			rbrack = shr
+		} else {
+			rbrack = p.expect(token.GTR)
+		}
+		typ = &ast.GenericType{Type: typ, ParameterTypes: params, Lbrack: lbrack, Rbrack: rbrack}
+	}
+
+	return
 }
 
-func (p *parser) parseArrayType() ast.Expr {
+func (p *parser) parseParameterTypeList() (list []ast.Expr, shr token.Pos) {
+	if p.trace {
+		defer un(trace(p, "ParameterTypeList"))
+	}
+
+	shr = token.NoPos
+
+	childType, shr := p.parseType(true)
+	list = append(list, childType)
+
+	// if shr is valid, then the closing > for this list has been consumed,
+	// so it can have no more types
+	for p.tok == token.COMMA && !shr.IsValid() {
+		p.next()
+		childType, shr = p.parseType(true)
+		list = append(list, childType)
+	}
+
+	return
+}
+
+func (p *parser) parseArrayType(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
 	if p.trace {
 		defer un(trace(p, "ArrayType"))
 	}
@@ -667,9 +709,9 @@ func (p *parser) parseArrayType() ast.Expr {
 	}
 	p.exprLev--
 	p.expect(token.RBRACK)
-	elt := p.parseType()
+	elt, shr := p.parseType(nestedGeneric)
 
-	return &ast.ArrayType{Lbrack: lbrack, Len: len, Elt: elt}
+	return &ast.ArrayType{Lbrack: lbrack, Len: len, Elt: elt}, shr
 }
 
 func (p *parser) makeIdentList(list []ast.Expr) []*ast.Ident {
@@ -699,14 +741,15 @@ func (p *parser) parseFieldDecl(scope *ast.Scope) *ast.Field {
 	// A type name used as an anonymous field looks like a field identifier.
 	var list []ast.Expr
 	for {
-		list = append(list, p.parseVarType(false))
+		typ, _ := p.parseVarType(false, false)
+		list = append(list, typ)
 		if p.tok != token.COMMA {
 			break
 		}
 		p.next()
 	}
 
-	typ := p.tryVarType(false)
+	typ, _ := p.tryVarType(false, false)
 
 	// analyze case
 	var idents []*ast.Ident
@@ -768,44 +811,46 @@ func (p *parser) parseStructType() *ast.StructType {
 	}
 }
 
-func (p *parser) parsePointerType() *ast.StarExpr {
+func (p *parser) parsePointerType(nestedGeneric bool) (*ast.StarExpr, token.Pos) {
 	if p.trace {
 		defer un(trace(p, "PointerType"))
 	}
 
 	star := p.expect(token.MUL)
-	base := p.parseType()
+	base, shr := p.parseType(nestedGeneric)
 
-	return &ast.StarExpr{Star: star, X: base}
+	return &ast.StarExpr{Star: star, X: base}, shr
 }
 
 // If the result is an identifier, it is not resolved.
-func (p *parser) tryVarType(isParam bool) ast.Expr {
+func (p *parser) tryVarType(isParam bool, nestedGeneric bool) (ast.Expr, token.Pos) {
 	if isParam && p.tok == token.ELLIPSIS {
 		pos := p.pos
 		p.next()
-		typ := p.tryIdentOrType() // don't use parseType so we can provide better error message
+
+		// don't use parseType so we can provide better error message
+		typ, shr := p.tryIdentOrType(nestedGeneric)
 		if typ != nil {
 			p.resolve(typ)
 		} else {
 			p.error(pos, "'...' parameter is missing type")
 			typ = &ast.BadExpr{From: pos, To: p.pos}
 		}
-		return &ast.Ellipsis{Ellipsis: pos, Elt: typ}
+		return &ast.Ellipsis{Ellipsis: pos, Elt: typ}, shr
 	}
-	return p.tryIdentOrType()
+	return p.tryIdentOrType(nestedGeneric)
 }
 
 // If the result is an identifier, it is not resolved.
-func (p *parser) parseVarType(isParam bool) ast.Expr {
-	typ := p.tryVarType(isParam)
+func (p *parser) parseVarType(isParam bool, nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
+	typ, shr = p.tryVarType(isParam, nestedGeneric)
 	if typ == nil {
 		pos := p.pos
 		p.errorExpected(pos, "type")
 		p.next() // make progress
 		typ = &ast.BadExpr{From: pos, To: p.pos}
 	}
-	return typ
+	return
 }
 
 func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params []*ast.Field) {
@@ -817,7 +862,8 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 	// A list of identifiers looks like a list of type names.
 	var list []ast.Expr
 	for {
-		list = append(list, p.parseVarType(ellipsisOk))
+		typ, _ := p.parseVarType(ellipsisOk, false)
+		list = append(list, typ)
 		if p.tok != token.COMMA {
 			break
 		}
@@ -828,7 +874,7 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 	}
 
 	// analyze case
-	if typ := p.tryVarType(ellipsisOk); typ != nil {
+	if typ, _ := p.tryVarType(ellipsisOk, false); typ != nil {
 		// IdentifierList Type
 		idents := p.makeIdentList(list)
 		field := &ast.Field{Names: idents, Type: typ}
@@ -843,7 +889,7 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 		p.next()
 		for p.tok != token.RPAREN && p.tok != token.EOF {
 			idents := p.parseIdentList()
-			typ := p.parseVarType(ellipsisOk)
+			typ, _ := p.parseVarType(ellipsisOk, false)
 			field := &ast.Field{Names: idents, Type: typ}
 			params = append(params, field)
 			// Go spec: The scope of an identifier denoting a function
@@ -891,7 +937,7 @@ func (p *parser) parseResult(scope *ast.Scope) *ast.FieldList {
 		return p.parseParameters(scope, false)
 	}
 
-	typ := p.tryType()
+	typ, _ := p.tryType(false)
 	if typ != nil {
 		list := make([]*ast.Field, 1)
 		list[0] = &ast.Field{Type: typ}
@@ -932,7 +978,7 @@ func (p *parser) parseMethodSpec(scope *ast.Scope) *ast.Field {
 	doc := p.leadComment
 	var idents []*ast.Ident
 	var typ ast.Expr
-	x := p.parseTypeName()
+	x, _ := p.parseTypeName(false)
 	if ident, isIdent := x.(*ast.Ident); isIdent && p.tok == token.LPAREN {
 		// method
 		idents = []*ast.Ident{ident}
@@ -976,21 +1022,21 @@ func (p *parser) parseInterfaceType() *ast.InterfaceType {
 	}
 }
 
-func (p *parser) parseMapType() *ast.MapType {
+func (p *parser) parseMapType(nestedGeneric bool) (*ast.MapType, token.Pos) {
 	if p.trace {
 		defer un(trace(p, "MapType"))
 	}
 
 	pos := p.expect(token.MAP)
 	p.expect(token.LBRACK)
-	key := p.parseType()
+	key, _ := p.parseType(false)
 	p.expect(token.RBRACK)
-	value := p.parseType()
+	value, shr := p.parseType(nestedGeneric)
 
-	return &ast.MapType{Map: pos, Key: key, Value: value}
+	return &ast.MapType{Map: pos, Key: key, Value: value}, shr
 }
 
-func (p *parser) parseChanType() *ast.ChanType {
+func (p *parser) parseChanType(nestedGeneric bool) (*ast.ChanType, token.Pos) {
 	if p.trace {
 		defer un(trace(p, "ChanType"))
 	}
@@ -1010,49 +1056,50 @@ func (p *parser) parseChanType() *ast.ChanType {
 		p.expect(token.CHAN)
 		dir = ast.RECV
 	}
-	value := p.parseType()
+	value, shr := p.parseType(nestedGeneric)
 
-	return &ast.ChanType{Begin: pos, Arrow: arrow, Dir: dir, Value: value}
+	return &ast.ChanType{Begin: pos, Arrow: arrow, Dir: dir, Value: value}, shr
 }
 
 // If the result is an identifier, it is not resolved.
-func (p *parser) tryIdentOrType() ast.Expr {
+func (p *parser) tryIdentOrType(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
 	switch p.tok {
 	case token.IDENT:
-		return p.parseTypeName()
+		return p.parseTypeName(nestedGeneric)
 	case token.LBRACK:
-		return p.parseArrayType()
+		return p.parseArrayType(nestedGeneric)
 	case token.STRUCT:
-		return p.parseStructType()
+		return p.parseStructType(), token.NoPos
 	case token.MUL:
-		return p.parsePointerType()
+		return p.parsePointerType(nestedGeneric)
 	case token.FUNC:
 		typ, _ := p.parseFuncType()
-		return typ
+		return typ, token.NoPos
 	case token.INTERFACE:
-		return p.parseInterfaceType()
+		return p.parseInterfaceType(), token.NoPos
 	case token.MAP:
-		return p.parseMapType()
+		return p.parseMapType(nestedGeneric)
 	case token.CHAN, token.ARROW:
-		return p.parseChanType()
+		return p.parseChanType(nestedGeneric)
 	case token.LPAREN:
 		lparen := p.pos
 		p.next()
-		typ := p.parseType()
+		typ, shr = p.parseType(nestedGeneric)
 		rparen := p.expect(token.RPAREN)
-		return &ast.ParenExpr{Lparen: lparen, X: typ, Rparen: rparen}
+		typ = &ast.ParenExpr{Lparen: lparen, X: typ, Rparen: rparen}
+		return
 	}
 
 	// no type found
-	return nil
+	return nil, token.NoPos
 }
 
-func (p *parser) tryType() ast.Expr {
-	typ := p.tryIdentOrType()
+func (p *parser) tryType(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
+	typ, shr = p.tryIdentOrType(nestedGeneric)
 	if typ != nil {
 		p.resolve(typ)
 	}
-	return typ
+	return
 }
 
 // ----------------------------------------------------------------------------
@@ -1156,7 +1203,7 @@ func (p *parser) parseOperand(lhs bool) ast.Expr {
 		return p.parseFuncTypeOrLit()
 	}
 
-	if typ := p.tryIdentOrType(); typ != nil {
+	if typ, _ := p.tryIdentOrType(false); typ != nil {
 		// could be type for composite literal or conversion
 		_, isIdent := typ.(*ast.Ident)
 		assert(!isIdent, "type cannot be identifier")
@@ -1191,7 +1238,7 @@ func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 		// type switch: typ == nil
 		p.next()
 	} else {
-		typ = p.parseType()
+		typ, _ = p.parseType(false)
 	}
 	rparen := p.expect(token.RPAREN)
 
@@ -1870,10 +1917,12 @@ func (p *parser) parseTypeList() (list []ast.Expr) {
 		defer un(trace(p, "TypeList"))
 	}
 
-	list = append(list, p.parseType())
+	typ, _ := p.parseType(false)
+	list = append(list, typ)
 	for p.tok == token.COMMA {
 		p.next()
-		list = append(list, p.parseType())
+		typ, _ = p.parseType(false)
+		list = append(list, typ)
 	}
 
 	return
@@ -2269,7 +2318,7 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 
 	pos := p.pos
 	idents := p.parseIdentList()
-	typ := p.tryType()
+	typ, _ := p.tryType(false)
 	var values []ast.Expr
 	// always permit optional initialization for more tolerant parsing
 	if p.tok == token.ASSIGN {
@@ -2323,7 +2372,7 @@ func (p *parser) parseTypeSpec(doc *ast.CommentGroup, _ token.Token, _ int) ast.
 	spec := &ast.TypeSpec{Doc: doc, Name: ident}
 	p.declare(spec, nil, p.topScope, ast.Typ, ident)
 
-	spec.Type = p.parseType()
+	spec.Type, _ = p.parseType(false)
 	p.expectSemi() // call before accessing p.linecomment
 	spec.Comment = p.lineComment
 
