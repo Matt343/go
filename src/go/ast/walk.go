@@ -84,7 +84,7 @@ func Walk(v Visitor, node Node) {
 			Walk(v, f)
 		}
 
-	case *ParameterType:
+	case *TypeParameter:
 		if n.Doc != nil {
 			Walk(v, n.Doc)
 		}
@@ -97,7 +97,7 @@ func Walk(v Visitor, node Node) {
 			Walk(v, n.Comment)
 		}
 
-	case *ParameterTypeList:
+	case *TypeParameterList:
 		for _, t := range n.List {
 			Walk(v, t)
 		}
@@ -198,7 +198,7 @@ func Walk(v Visitor, node Node) {
 
 	case *GenericType:
 		Walk(v, n.Type)
-		walkExprList(v, n.ParameterTypes)
+		walkExprList(v, n.TypeParameters)
 
 	// Statements
 	case *BadStmt:

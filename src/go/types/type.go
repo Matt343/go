@@ -94,28 +94,28 @@ func (b *Basic) Name() string { return b.name }
 
 // A GenericType is parameterized by one or more other types.
 type GenericType struct {
-	parameterTypes []Type
+	typeParameters []Type
 }
 
-// NewGenericType returns a new generic type for the given parameter types
+// NewGenericType returns a new generic type for the given type parameters
 func NewGenericType(types ...Type) *GenericType {
 	return &GenericType{types}
 }
 
-// NumParameters is the number of parameter types.
+// NumParameters is the number of type parameters.
 func (g *GenericType) NumParameters() int {
-	return len(g.parameterTypes)
+	return len(g.typeParameters)
 }
 
-// ParameterType returns the i'th parameter type for 0 <= i < NumParameters().
-func (g *GenericType) ParameterType(i int) Type {
-	return g.parameterTypes[i]
+// TypeParameter returns the i'th type parameters for 0 <= i < NumParameters().
+func (g *GenericType) TypeParameter(i int) Type {
+	return g.typeParameters[i]
 }
 
-// SetParameterTypes is a convenience method to set all of the
-// parameter types of a generic type at once.
-func (g *GenericType) SetParameterTypes(types ...Type) {
-	g.parameterTypes = types
+// SetTypeParameters is a convenience method to set all of the
+// type parameters of a generic type at once.
+func (g *GenericType) SetTypeParameters(types ...Type) {
+	g.typeParameters = types
 }
 
 // An Array represents an array type.
@@ -131,7 +131,7 @@ func NewArray(elem Type, len int64) *Array { return &Array{len, *NewGenericType(
 func (a *Array) Len() int64 { return a.len }
 
 // Elem returns element type of array a.
-func (a *Array) Elem() Type { return a.ParameterType(0) }
+func (a *Array) Elem() Type { return a.TypeParameter(0) }
 
 // A Slice represents a slice type.
 type Slice struct {
@@ -142,7 +142,7 @@ type Slice struct {
 func NewSlice(elem Type) *Slice { return &Slice{*NewGenericType(elem)} }
 
 // Elem returns the element type of slice s.
-func (s *Slice) Elem() Type { return s.ParameterType(0) }
+func (s *Slice) Elem() Type { return s.TypeParameter(0) }
 
 // A Struct represents a struct type.
 type Struct struct {
@@ -192,7 +192,7 @@ type Pointer struct {
 func NewPointer(elem Type) *Pointer { return &Pointer{*NewGenericType(elem)} }
 
 // Elem returns the element type for the given pointer p.
-func (p *Pointer) Elem() Type { return p.ParameterType(0) }
+func (p *Pointer) Elem() Type { return p.TypeParameter(0) }
 
 // A Tuple represents an ordered list of variables; a nil *Tuple is a valid (empty) tuple.
 // Tuples are used as components of signatures and to represent the type of multiple
@@ -372,10 +372,10 @@ func NewMap(key, elem Type) *Map {
 }
 
 // Key returns the key type of map m.
-func (m *Map) Key() Type { return m.ParameterType(0) }
+func (m *Map) Key() Type { return m.TypeParameter(0) }
 
 // Elem returns the element type of map m.
-func (m *Map) Elem() Type { return m.ParameterType(1) }
+func (m *Map) Elem() Type { return m.TypeParameter(1) }
 
 // A Chan represents a channel type.
 type Chan struct {
@@ -402,7 +402,7 @@ func NewChan(dir ChanDir, elem Type) *Chan {
 func (c *Chan) Dir() ChanDir { return c.dir }
 
 // Elem returns the element type of channel c.
-func (c *Chan) Elem() Type { return c.ParameterType(0) }
+func (c *Chan) Elem() Type { return c.TypeParameter(0) }
 
 // A Named represents a named type.
 type Named struct {

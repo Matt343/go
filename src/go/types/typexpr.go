@@ -254,13 +254,13 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 			typ := new(Array)
 			def.setUnderlying(typ)
 			typ.len = check.arrayLength(e.Len)
-			typ.SetParameterTypes(check.typExpr(e.Elt, nil, path))
+			typ.SetTypeParameters(check.typExpr(e.Elt, nil, path))
 			return typ
 
 		} else {
 			typ := new(Slice)
 			def.setUnderlying(typ)
-			typ.SetParameterTypes(check.typ(e.Elt))
+			typ.SetTypeParameters(check.typ(e.Elt))
 			return typ
 		}
 
@@ -273,7 +273,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 	case *ast.StarExpr:
 		typ := new(Pointer)
 		def.setUnderlying(typ)
-		typ.SetParameterTypes(check.typ(e.X))
+		typ.SetTypeParameters(check.typ(e.X))
 		return typ
 
 	case *ast.FuncType:
@@ -292,7 +292,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		typ := new(Map)
 		def.setUnderlying(typ)
 
-		typ.SetParameterTypes(check.typ(e.Key), check.typ(e.Value))
+		typ.SetTypeParameters(check.typ(e.Key), check.typ(e.Value))
 
 		// spec: "The comparison operators == and != must be fully defined
 		// for operands of the key type; thus the key type must not be a
@@ -326,7 +326,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		}
 
 		typ.dir = dir
-		typ.SetParameterTypes(check.typ(e.Value))
+		typ.SetTypeParameters(check.typ(e.Value))
 		return typ
 
 	default:

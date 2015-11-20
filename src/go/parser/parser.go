@@ -652,7 +652,7 @@ func (p *parser) parseTypeName(nestedGeneric bool) (typ ast.Expr, shr token.Pos)
 	if p.tok == token.LSS {
 		// parse type paramter list
 		lbrack := p.expect(token.LSS)
-		params, childShr := p.parseParameterTypeList()
+		params, childShr := p.parseTypeParameterList()
 
 		var rbrack token.Pos
 
@@ -665,15 +665,15 @@ func (p *parser) parseTypeName(nestedGeneric bool) (typ ast.Expr, shr token.Pos)
 		} else {
 			rbrack = p.expect(token.GTR)
 		}
-		typ = &ast.GenericType{Type: typ, ParameterTypes: params, Lbrack: lbrack, Rbrack: rbrack}
+		typ = &ast.GenericType{Type: typ, TypeParameters: params, Lbrack: lbrack, Rbrack: rbrack}
 	}
 
 	return
 }
 
-func (p *parser) parseParameterTypeList() (list []ast.Expr, shr token.Pos) {
+func (p *parser) parseTypeParameterList() (list []ast.Expr, shr token.Pos) {
 	if p.trace {
-		defer un(trace(p, "ParameterTypeList"))
+		defer un(trace(p, "TypeParameterList"))
 	}
 
 	shr = token.NoPos

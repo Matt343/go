@@ -222,39 +222,51 @@ func (f *FieldList) NumFields() int {
 	return n
 }
 
-// A ParameterType represents a parameter Type declaration in a generic function
+// The variance of a parameter type is represented by
+// one of the following constants.
+//
+type Variance int
+
+const (
+	INVARIANT Variance = 1 << iota
+	COVARIANT
+	CONTRAVARIANT
+)
+
+// A TypeParameter represents a parameter Type declaration in a generic function
 // signature or struct type.
 //
-type ParameterType struct {
+type TypeParameter struct {
 	Doc       *CommentGroup // associated documentation; or nil
 	Names     []*Ident      // parameter type names; non-nil
 	TypeBound Expr          // parameter type bound; non-nil
+	Variance  Variance      // parameter type variance; non-nil
 	Tag       *BasicLit     // parameter type tag; or nil
 	Comment   *CommentGroup // line comments; or nil
 }
 
-func (p *ParameterType) Pos() token.Pos {
+func (p *TypeParameter) Pos() token.Pos {
 	if len(p.Names) > 0 {
 		return p.Names[0].Pos()
 	}
 	return p.TypeBound.Pos()
 }
 
-func (p *ParameterType) End() token.Pos {
+func (p *TypeParameter) End() token.Pos {
 	if p.Tag != nil {
 		return p.Tag.End()
 	}
 	return p.TypeBound.End()
 }
 
-// A ParameterTypeList represents a list of ParameterTypes, enclosed by braces.
-type ParameterTypeList struct {
+// A TypeParameterList represents a list of TypeParameters, enclosed by braces.
+type TypeParameterList struct {
 	Lbrack token.Pos        // position of opening brace
-	List   []*ParameterType // parameter type list; non-nil
+	List   []*TypeParameter // parameter type list; non-nil
 	Rbrack token.Pos        // position of closing brace
 }
 
-func (p *ParameterTypeList) Pos() token.Pos {
+func (p *TypeParameterList) Pos() token.Pos {
 	if p.Lbrack.IsValid() {
 		return p.Lbrack
 	}
@@ -266,7 +278,7 @@ func (p *ParameterTypeList) Pos() token.Pos {
 	return token.NoPos
 }
 
-func (p *ParameterTypeList) End() token.Pos {
+func (p *TypeParameterList) End() token.Pos {
 	if p.Rbrack.IsValid() {
 		return p.Rbrack + 1
 	}
@@ -278,8 +290,8 @@ func (p *ParameterTypeList) End() token.Pos {
 	return token.NoPos
 }
 
-// NumParameterTypes returns the number of parameter types in a ParameterTypeList.
-func (p *ParameterTypeList) NumParameterTypes() int {
+// NumTypeParameters returns the number of type  parameters in a TypeParameterList.
+func (p *TypeParameterList) NumTypeParameters() int {
 	n := 0
 	if p != nil {
 		for _, q := range p.List {
@@ -491,7 +503,7 @@ type (
 	GenericType struct {
 		Type           Expr      // parameterized type; non-nil
 		Lbrack         token.Pos // position of left bracket
-		ParameterTypes []Expr    // list of parameters types; non-nil
+		TypeParameters []Expr    // list of type parameters; non-nil
 		Rbrack         token.Pos // psoition of right bracket
 	}
 )
