@@ -692,6 +692,96 @@ func (p *parser) parseTypeParameterList() (list []ast.Expr, shr token.Pos) {
 	return
 }
 
+func (p *parser) parseTypeParamSpecList(scope *ast.Scope) *ast.TypeParameterList {
+	if p.trace {
+		defer un(trace(p, "TypeParameterList"))
+	}
+
+	if p.tok != token.LSS {
+		return nil
+	}
+
+	lbrack := p.expect(token.LSS)
+
+	var types []*ast.TypeParameter
+
+	childType, shr := p.parseTypeParamSpec(scope)
+	types = append(types, childType)
+
+	for p.tok == token.COMMA && !shr.IsValid() {
+		p.next()
+		childType, shr = p.parseTypeParamSpec(scope)
+		types = append(types, childType)
+	}
+
+	var rbrack token.Pos
+	if shr.IsValid() {
+		rbrack = shr
+	} else {
+		rbrack = p.expect(token.GTR)
+	}
+
+	return &ast.TypeParameterList{Lbrack: lbrack, List: types, Rbrack: rbrack}
+}
+
+func (p *parser) parseTypeParamSpec(scope *ast.Scope) (typeParam *ast.TypeParameter, shr token.Pos) {
+	doc := p.leadComment
+
+	// 1st FieldDecl
+	// A type name used as an anonymous field looks like a field identifier.
+	var list []ast.Expr
+	shr = token.NoPos
+	variance := ast.INVARIANT
+
+	for {
+		typ, _ := p.parseVarType(false, false)
+		list = append(list, typ)
+		if p.tok != token.COMMA {
+			break
+		}
+		p.next()
+	}
+
+	if p.tok == token.ADD {
+		variance = ast.COVARIANT
+		p.next()
+	} else if p.tok == token.SUB {
+		variance = ast.CONTRAVARIANT
+		p.next()
+	}
+	typ, shr := p.tryVarType(false, true)
+
+	// analyze case
+	var idents []*ast.Ident
+	if typ != nil {
+		// IdentifierList Type
+		idents = p.makeIdentList(list)
+	} else {
+		// ["*"] TypeName (AnonymousField)
+		typ = list[0] // we always have at least one element
+		if n := len(list); n > 1 {
+			p.errorExpected(p.pos, "type")
+			typ = &ast.BadExpr{From: p.pos, To: p.pos}
+		} else if !isTypeName(deref(typ)) {
+			p.errorExpected(typ.Pos(), "anonymous field")
+			typ = &ast.BadExpr{From: typ.Pos(), To: p.safePos(typ.End())}
+		}
+	}
+
+	// Tag
+	var tag *ast.BasicLit
+	if p.tok == token.STRING && !shr.IsValid() {
+		tag = &ast.BasicLit{ValuePos: p.pos, Kind: p.tok, Value: p.lit}
+		p.next()
+	}
+
+	typeParam = &ast.TypeParameter{Doc: doc, Names: idents, TypeBound: typ, Tag: tag, Comment: p.lineComment, Variance: variance}
+	p.declare(typeParam, nil, scope, ast.Typ, idents...)
+	p.resolve(typ)
+
+	return
+}
+
 func (p *parser) parseArrayType(nestedGeneric bool) (typ ast.Expr, shr token.Pos) {
 	if p.trace {
 		defer un(trace(p, "ArrayType"))
@@ -947,11 +1037,12 @@ func (p *parser) parseResult(scope *ast.Scope) *ast.FieldList {
 	return nil
 }
 
-func (p *parser) parseSignature(scope *ast.Scope) (params, results *ast.FieldList) {
+func (p *parser) parseSignature(scope *ast.Scope) (typeParams *ast.TypeParameterList, params, results *ast.FieldList) {
 	if p.trace {
 		defer un(trace(p, "Signature"))
 	}
 
+	typeParams = p.parseTypeParamSpecList(scope)
 	params = p.parseParameters(scope, true)
 	results = p.parseResult(scope)
 
@@ -965,9 +1056,9 @@ func (p *parser) parseFuncType() (*ast.FuncType, *ast.Scope) {
 
 	pos := p.expect(token.FUNC)
 	scope := ast.NewScope(p.topScope) // function scope
-	params, results := p.parseSignature(scope)
+	typeParams, params, results := p.parseSignature(scope)
 
-	return &ast.FuncType{Func: pos, Params: params, Results: results}, scope
+	return &ast.FuncType{Func: pos, TypeParams: typeParams, Params: params, Results: results}, scope
 }
 
 func (p *parser) parseMethodSpec(scope *ast.Scope) *ast.Field {
@@ -983,8 +1074,8 @@ func (p *parser) parseMethodSpec(scope *ast.Scope) *ast.Field {
 		// method
 		idents = []*ast.Ident{ident}
 		scope := ast.NewScope(nil) // method scope
-		params, results := p.parseSignature(scope)
-		typ = &ast.FuncType{Func: token.NoPos, Params: params, Results: results}
+		typeParams, params, results := p.parseSignature(scope)
+		typ = &ast.FuncType{Func: token.NoPos, TypeParams: typeParams, Params: params, Results: results}
 	} else {
 		// embedded interface
 		typ = x
@@ -2426,7 +2517,7 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 
 	ident := p.parseIdent()
 
-	params, results := p.parseSignature(scope)
+	typeParams, params, results := p.parseSignature(scope)
 
 	var body *ast.BlockStmt
 	if p.tok == token.LBRACE {
@@ -2439,9 +2530,10 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 		Recv: recv,
 		Name: ident,
 		Type: &ast.FuncType{
-			Func:    pos,
-			Params:  params,
-			Results: results,
+			Func:       pos,
+			TypeParams: typeParams,
+			Params:     params,
+			Results:    results,
 		},
 		Body: body,
 	}

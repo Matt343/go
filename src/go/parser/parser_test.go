@@ -94,7 +94,7 @@ func TestParseExpr(t *testing.T) {
 	src = "b.(a<type1, type2<int>>)"
 	x, err = ParseExpr(src)
 	if err != nil {
-		t.Errorf("ParseExpr(%q%): %v", src, err)
+		t.Errorf("ParseExpr(%q): %v", src, err)
 	}
 
 	// sanity check
@@ -103,6 +103,30 @@ func TestParseExpr(t *testing.T) {
 	} else {
 		if _, ok := y.Type.(*ast.GenericType); !ok {
 			t.Errorf("ParseExpr(%q).Type got %T, want *ast.GenericType", src, y.Type)
+		}
+	}
+
+	// a valid generic function type
+	src = "func <param +Bound>(arg Typ) Ret"
+	x, err = ParseExpr(src)
+	if err != nil {
+		t.Errorf("ParseExpr(%q): %v", src, err)
+	}
+
+	// sanity check
+	if y, ok := x.(*ast.FuncType); !ok {
+		t.Errorf("ParseExpr(%q) got %T, want *ast.FuncType", src, x)
+	} else {
+		if y.TypeParams == nil || len(y.TypeParams.List) == 0 {
+			t.Errorf("ParseExpr(%q) has no type parameters", src)
+		} else {
+			p := y.TypeParams.List[0]
+			if len(p.Names) != 1 || p.Names[0].Name != "param" {
+				t.Errorf("ParseExpr(%q) expected param as type parameter name", src)
+			}
+			if p.Variance != ast.COVARIANT {
+				t.Errorf("ParseExpr(%q) is not covariant", src)
+			}
 		}
 	}
 
