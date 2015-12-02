@@ -463,9 +463,10 @@ type (
 
 	// A StructType node represents a struct type.
 	StructType struct {
-		Struct     token.Pos  // position of "struct" keyword
-		Fields     *FieldList // list of field declarations
-		Incomplete bool       // true if (source) fields are missing in the Fields list
+		Struct     token.Pos          // position of "struct" keyword
+		TypeParams *TypeParameterList // type parameters; or nil
+		Fields     *FieldList         // list of field declarations
+		Incomplete bool               // true if (source) fields are missing in the Fields list
 	}
 
 	// Pointer types are represented via StarExpr nodes.
@@ -480,9 +481,10 @@ type (
 
 	// An InterfaceType node represents an interface type.
 	InterfaceType struct {
-		Interface  token.Pos  // position of "interface" keyword
-		Methods    *FieldList // list of methods
-		Incomplete bool       // true if (source) methods are missing in the Methods list
+		Interface  token.Pos          // position of "interface" keyword
+		TypeParams *TypeParameterList // type parameters; or nil
+		Methods    *FieldList         // list of methods
+		Incomplete bool               // true if (source) methods are missing in the Methods list
 	}
 
 	// A MapType node represents a map type.

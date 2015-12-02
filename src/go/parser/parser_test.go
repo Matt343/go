@@ -130,6 +130,30 @@ func TestParseExpr(t *testing.T) {
 		}
 	}
 
+	// a valid generic struct type
+	src = "struct <param -Bound> { Field1, Field2 Type; Field3 param }"
+	x, err = ParseExpr(src)
+	if err != nil {
+		t.Errorf("ParseExpr(%q): %v", src, err)
+	}
+
+	// sanity check
+	if y, ok := x.(*ast.StructType); !ok {
+		t.Errorf("ParseExpr(%q) got %T, want *ast.StructType", src, x)
+	} else {
+		if y.TypeParams == nil || len(y.TypeParams.List) == 0 {
+			t.Errorf("ParseExpr(%q) has no type parameters", src)
+		} else {
+			p := y.TypeParams.List[0]
+			if len(p.Names) != 1 || p.Names[0].Name != "param" {
+				t.Errorf("ParseExpr(%q) expected param as type parameter name", src)
+			}
+			if p.Variance != ast.CONTRAVARIANT {
+				t.Errorf("ParseExpr(%q) is not contravariant", src)
+			}
+		}
+	}
+
 	// an invalid expression
 	src = "a + *"
 	if _, err := ParseExpr(src); err == nil {

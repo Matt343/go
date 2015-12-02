@@ -880,8 +880,9 @@ func (p *parser) parseStructType() *ast.StructType {
 	}
 
 	pos := p.expect(token.STRUCT)
-	lbrace := p.expect(token.LBRACE)
 	scope := ast.NewScope(nil) // struct scope
+	typeParams := p.parseTypeParamSpecList(scope)
+	lbrace := p.expect(token.LBRACE)
 	var list []*ast.Field
 	for p.tok == token.IDENT || p.tok == token.MUL || p.tok == token.LPAREN {
 		// a field declaration cannot start with a '(' but we accept
@@ -898,6 +899,7 @@ func (p *parser) parseStructType() *ast.StructType {
 			List:    list,
 			Closing: rbrace,
 		},
+		TypeParams: typeParams,
 	}
 }
 
@@ -1095,8 +1097,9 @@ func (p *parser) parseInterfaceType() *ast.InterfaceType {
 	}
 
 	pos := p.expect(token.INTERFACE)
-	lbrace := p.expect(token.LBRACE)
 	scope := ast.NewScope(nil) // interface scope
+	typeParams := p.parseTypeParamSpecList(scope)
+	lbrace := p.expect(token.LBRACE)
 	var list []*ast.Field
 	for p.tok == token.IDENT {
 		list = append(list, p.parseMethodSpec(scope))
@@ -1104,7 +1107,8 @@ func (p *parser) parseInterfaceType() *ast.InterfaceType {
 	rbrace := p.expect(token.RBRACE)
 
 	return &ast.InterfaceType{
-		Interface: pos,
+		Interface:  pos,
+		TypeParams: typeParams,
 		Methods: &ast.FieldList{
 			Opening: lbrace,
 			List:    list,

@@ -176,9 +176,15 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.Elt)
 
 	case *StructType:
+		if n.TypeParams != nil {
+			Walk(v, n.TypeParams)
+		}
 		Walk(v, n.Fields)
 
 	case *FuncType:
+		if n.TypeParams != nil {
+			Walk(v, n.TypeParams)
+		}
 		if n.Params != nil {
 			Walk(v, n.Params)
 		}
@@ -187,6 +193,9 @@ func Walk(v Visitor, node Node) {
 		}
 
 	case *InterfaceType:
+		if n.TypeParams != nil {
+			Walk(v, n.TypeParams)
+		}
 		Walk(v, n.Methods)
 
 	case *MapType:
