@@ -4,10 +4,11 @@
 
 package types
 
-import "sort"
-import "go/ast"
-
-// TODO(gri) Revisit factory functions - make sure they have all relevant parameters.
+import (
+	"go/ast"
+	"sort"
+	"sync"
+)
 
 // A Type represents a type of Go.
 // All types implement the Type interface.
@@ -152,10 +153,10 @@ func (s *Slice) Elem() Type { return s.elem }
 
 // A Struct represents a struct type.
 type Struct struct {
-	fields []*Var
-	tags   []string // field tags; nil if there are no tags
-	// TODO(gri) access to offsets is not threadsafe - fix this
-	offsets []int64 // field offsets in bytes, lazily initialized
+	fields      []*Var
+	tags        []string  // field tags; nil if there are no tags
+	offsets     []int64   // field offsets in bytes, lazily initialized
+	offsetsOnce sync.Once // for threadsafe lazy initialization of offsets
 	GenericType
 }
 

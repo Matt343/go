@@ -9,9 +9,7 @@ import (
 	"fmt"
 )
 
-/*
- * static initialization
- */
+// static initialization
 const (
 	InitNotStarted = 0
 	InitDone       = 1
@@ -126,10 +124,10 @@ func init1(n *Node, out **NodeList) {
 			}
 
 		case OAS2FUNC, OAS2MAPR, OAS2DOTTYPE, OAS2RECV:
-			if defn.Initorder != InitNotStarted {
+			if defn.Initorder == InitDone {
 				break
 			}
-			defn.Initorder = InitDone
+			defn.Initorder = InitPending
 			for l := defn.Rlist; l != nil; l = l.Next {
 				init1(l.N, out)
 			}
@@ -137,6 +135,7 @@ func init1(n *Node, out **NodeList) {
 				Dump("nonstatic", defn)
 			}
 			*out = list(*out, defn)
+			defn.Initorder = InitDone
 		}
 	}
 
@@ -248,10 +247,8 @@ func initfix(l *NodeList) *NodeList {
 	return lout
 }
 
-/*
- * compilation of top-level (static) assignments
- * into DATA statements if at all possible.
- */
+// compilation of top-level (static) assignments
+// into DATA statements if at all possible.
 func staticinit(n *Node, out **NodeList) bool {
 	if n.Op != ONAME || n.Class != PEXTERN || n.Name.Defn == nil || n.Name.Defn.Op != OAS {
 		Fatalf("staticinit")
@@ -382,10 +379,6 @@ func staticassign(l *Node, r *Node, out **NodeList) bool {
 	}
 
 	switch r.Op {
-	//dump("not static", r);
-	default:
-		break
-
 	case ONAME:
 		return staticcopy(l, r, out)
 
@@ -408,12 +401,8 @@ func staticassign(l *Node, r *Node, out **NodeList) bool {
 
 	case OPTRLIT:
 		switch r.Left.Op {
-		//dump("not static ptrlit", r);
-		default:
-			break
-
-			// Init pointer.
 		case OARRAYLIT, OMAPLIT, OSTRUCTLIT:
+			// Init pointer.
 			a := staticname(r.Left.Type, 1)
 
 			inittemps[r] = a
@@ -425,6 +414,7 @@ func staticassign(l *Node, r *Node, out **NodeList) bool {
 			}
 			return true
 		}
+		//dump("not static ptrlit", r);
 
 	case OSTRARRAYBYTE:
 		if l.Class == PEXTERN && r.Left.Op == OLITERAL {
@@ -456,7 +446,6 @@ func staticassign(l *Node, r *Node, out **NodeList) bool {
 		}
 		fallthrough
 
-		// fall through
 	case OSTRUCTLIT:
 		initplan(r)
 
@@ -481,21 +470,29 @@ func staticassign(l *Node, r *Node, out **NodeList) bool {
 
 		return true
 
-		// TODO: Table-driven map insert.
 	case OMAPLIT:
+		// TODO: Table-driven map insert.
 		break
+
+	case OCLOSURE:
+		if r.Func.Cvars == nil {
+			// Closures with no captured variables are globals,
+			// so the assignment can be done at link time.
+			n := *l
+			gdata(&n, r.Func.Closure.Func.Nname, Widthptr)
+			return true
+		}
 	}
 
+	//dump("not static", r);
 	return false
 }
 
-/*
- * from here down is the walk analysis
- * of composite literals.
- * most of the work is to generate
- * data statements for the constant
- * part of the composite literal.
- */
+// from here down is the walk analysis
+// of composite literals.
+// most of the work is to generate
+// data statements for the constant
+// part of the composite literal.
 func staticname(t *Type, ctxt int) *Node {
 	n := newname(Lookupf("statictmp_%.4d", statuniqgen))
 	statuniqgen++
@@ -765,7 +762,7 @@ func slicelit(ctxt int, n *Node, var_ *Node, init **NodeList) {
 	// set auto to point at new temp or heap (3 assign)
 	var a *Node
 	if x := prealloc[n]; x != nil {
-		// temp allocated during order.c for dddarg
+		// temp allocated during order.go for dddarg
 		x.Type = t
 
 		if vstat == nil {

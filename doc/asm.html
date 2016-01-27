@@ -176,7 +176,7 @@ This form is used to name global functions and data.
 Adding <code>&lt;&gt;</code> to the name, as in <span style="white-space: nowrap"><code>foo&lt;&gt;(SB)</code></span>, makes the name
 visible only in the current source file, like a top-level <code>static</code> declaration in a C file.
 Adding an offset to the name refers to that offset from the symbol's address, so
-<code>a+4(SB)</code> is four bytes past the start of <code>foo</code>.
+<code>foo+4(SB)</code> is four bytes past the start of <code>foo</code>.
 </p>
 
 <p>
@@ -508,6 +508,13 @@ pseudo-instruction <code>NO_LOCAL_POINTERS</code>.
 Because stack resizing is implemented by moving the stack,
 the stack pointer may change during any function call:
 even pointers to stack data must not be kept in local variables.
+</p>
+
+<p>
+Assembly functions should always be given Go prototypes,
+both to provide pointer information for the arguments and results
+and to let <code>go</code> <code>vet</code> check that
+the offsets being used to access them are correct.
 </p>
 
 <h2 id="architectures">Architecture-specific details</h2>

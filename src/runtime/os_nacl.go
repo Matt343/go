@@ -6,6 +6,12 @@ package runtime
 
 import "unsafe"
 
+type mOS struct {
+	waitsema      int32 // semaphore for parking on locks
+	waitsemacount int32
+	waitsemalock  int32
+}
+
 func nacl_exception_stack(p uintptr, size int32) int32
 func nacl_exception_handler(fn uintptr, arg unsafe.Pointer) int32
 func nacl_sem_create(flag int32) int32
@@ -37,6 +43,10 @@ func write(fd uintptr, p unsafe.Pointer, n int32) int32
 //go:linkname os_sigpipe os.sigpipe
 func os_sigpipe() {
 	throw("too many writes on closed pipe")
+}
+
+func dieFromSignal(sig int32) {
+	exit(2)
 }
 
 func sigpanic() {

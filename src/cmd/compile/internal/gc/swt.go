@@ -137,8 +137,10 @@ func typecheckswitch(n *Node) {
 						} else {
 							Yyerror("invalid case %v in switch (mismatched types %v and bool)", ll.N, ll.N.Type)
 						}
-					case nilonly != "" && !Isconst(ll.N, CTNIL):
+					case nilonly != "" && !isnil(ll.N):
 						Yyerror("invalid case %v in switch (can only compare %s %v to nil)", ll.N, nilonly, n.Left)
+					case Isinter(t) && !Isinter(ll.N.Type) && algtype1(ll.N.Type, nil) == ANOEQ:
+						Yyerror("invalid case %v in switch (incomparable type)", Nconv(ll.N, obj.FmtLong))
 					}
 
 				// type switch
@@ -744,11 +746,11 @@ func exprcmp(c1, c2 *caseClause) int {
 	n2 := c2.node.Left
 
 	// sort by type (for switches on interface)
-	ct := int(n1.Val().Ctype())
-	if ct > int(n2.Val().Ctype()) {
+	ct := n1.Val().Ctype()
+	if ct > n2.Val().Ctype() {
 		return +1
 	}
-	if ct < int(n2.Val().Ctype()) {
+	if ct < n2.Val().Ctype() {
 		return -1
 	}
 	if !Eqtype(n1.Type, n2.Type) {

@@ -806,7 +806,7 @@ func checkauto(fn *Node, p *obj.Prog, n *Node) {
 		return
 	}
 
-	fmt.Printf("checkauto %v: %v (%p; class=%d) not found in %v\n", Curfn, n, n, n.Class, p)
+	fmt.Printf("checkauto %v: %v (%p; class=%d) not found in %p %v\n", funcSym(Curfn), n, n, n.Class, p, p)
 	for l := fn.Func.Dcl; l != nil; l = l.Next {
 		fmt.Printf("\t%v (%p; class=%d)\n", l.N, l.N, l.N.Class)
 	}
@@ -818,7 +818,7 @@ func checkparam(fn *Node, p *obj.Prog, n *Node) {
 		return
 	}
 	var a *Node
-	var class uint8
+	var class Class
 	for l := fn.Func.Dcl; l != nil; l = l.Next {
 		a = l.N
 		class = a.Class &^ PHEAP
@@ -1426,7 +1426,14 @@ func livenessepilogue(lv *Liveness) {
 						// the PCDATA must begin one instruction early too.
 						// The instruction before a call to deferreturn is always a
 						// no-op, to keep PC-specific data unambiguous.
-						splicebefore(lv, bb, newpcdataprog(p.Opt.(*obj.Prog), pos), p.Opt.(*obj.Prog))
+						prev := p.Opt.(*obj.Prog)
+						if Ctxt.Arch.Thechar == '9' {
+							// On ppc64 there is an additional instruction
+							// (another no-op or reload of toc pointer) before
+							// the call.
+							prev = prev.Opt.(*obj.Prog)
+						}
+						splicebefore(lv, bb, newpcdataprog(prev, pos), prev)
 					} else {
 						splicebefore(lv, bb, newpcdataprog(p, pos), p)
 					}

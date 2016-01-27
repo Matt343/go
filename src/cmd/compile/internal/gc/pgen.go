@@ -94,7 +94,11 @@ func gvardefx(n *Node, as int) {
 
 	switch n.Class {
 	case PAUTO, PPARAM, PPARAMOUT:
-		Thearch.Gins(as, nil, n)
+		if as == obj.AVARLIVE {
+			Thearch.Gins(as, n, nil)
+		} else {
+			Thearch.Gins(as, nil, n)
+		}
 	}
 }
 
@@ -106,13 +110,17 @@ func gvarkill(n *Node) {
 	gvardefx(n, obj.AVARKILL)
 }
 
+func gvarlive(n *Node) {
+	gvardefx(n, obj.AVARLIVE)
+}
+
 func removevardef(firstp *obj.Prog) {
 	for p := firstp; p != nil; p = p.Link {
-		for p.Link != nil && (p.Link.As == obj.AVARDEF || p.Link.As == obj.AVARKILL) {
+		for p.Link != nil && (p.Link.As == obj.AVARDEF || p.Link.As == obj.AVARKILL || p.Link.As == obj.AVARLIVE) {
 			p.Link = p.Link.Link
 		}
 		if p.To.Type == obj.TYPE_BRANCH {
-			for p.To.Val.(*obj.Prog) != nil && (p.To.Val.(*obj.Prog).As == obj.AVARDEF || p.To.Val.(*obj.Prog).As == obj.AVARKILL) {
+			for p.To.Val.(*obj.Prog) != nil && (p.To.Val.(*obj.Prog).As == obj.AVARDEF || p.To.Val.(*obj.Prog).As == obj.AVARKILL || p.To.Val.(*obj.Prog).As == obj.AVARLIVE) {
 				p.To.Val = p.To.Val.(*obj.Prog).Link
 			}
 		}
@@ -129,6 +137,9 @@ func gcsymdup(s *Sym) {
 }
 
 func emitptrargsmap() {
+	if Curfn.Func.Nname.Sym.Name == "_" {
+		return
+	}
 	sym := Lookup(fmt.Sprintf("%s.args_stackmap", Curfn.Func.Nname.Sym.Name))
 
 	nptr := int(Curfn.Type.Argwid / int64(Widthptr))
@@ -282,7 +293,7 @@ func allocauto(ptxt *obj.Prog) {
 		if haspointers(n.Type) {
 			stkptrsize = Stksize
 		}
-		if Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9' {
+		if Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9' {
 			Stksize = Rnd(Stksize, int64(Widthptr))
 		}
 		if Stksize >= 1<<31 {
@@ -319,7 +330,7 @@ func Cgen_checknil(n *Node) {
 		Fatalf("bad checknil")
 	}
 
-	if ((Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9') && n.Op != OREGISTER) || !n.Addable || n.Op == OLITERAL {
+	if ((Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9') && n.Op != OREGISTER) || !n.Addable || n.Op == OLITERAL {
 		var reg Node
 		Regalloc(&reg, Types[Tptr], n)
 		Cgen(n, &reg)
@@ -399,8 +410,8 @@ func compile(fn *Node) {
 	if nerrors != 0 {
 		goto ret
 	}
-	if flag_race != 0 {
-		racewalk(Curfn)
+	if instrumenting {
+		instrument(Curfn)
 	}
 	if nerrors != 0 {
 		goto ret

@@ -192,7 +192,7 @@ var panicdiv *gc.Node
  *	res = nl % nr
  * according to op.
  */
-func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
+func dodiv(op gc.Op, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	// Have to be careful about handling
 	// most negative int divided by -1 correctly.
 	// The hardware will trap.
@@ -335,7 +335,8 @@ func savex(dr int, x *gc.Node, oldx *gc.Node, res *gc.Node, t *gc.Type) {
 		x.Type = gc.Types[gc.TINT64]
 		gmove(x, oldx)
 		x.Type = t
-		oldx.Etype = r // squirrel away old r value
+		// TODO(marvin): Fix Node.EType type union.
+		oldx.Etype = gc.EType(r) // squirrel away old r value
 		gc.SetReg(dr, 1)
 	}
 }
@@ -364,24 +365,25 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	gc.Cgenr(nl, &n1, res)
 	var n2 gc.Node
 	gc.Cgenr(nr, &n2, nil)
-	var ax gc.Node
-	gc.Nodreg(&ax, t, x86.REG_AX)
+	var ax, oldax, dx, olddx gc.Node
+	savex(x86.REG_AX, &ax, &oldax, res, gc.Types[gc.TUINT64])
+	savex(x86.REG_DX, &dx, &olddx, res, gc.Types[gc.TUINT64])
 	gmove(&n1, &ax)
 	gins(a, &n2, nil)
 	gc.Regfree(&n2)
 	gc.Regfree(&n1)
 
-	var dx gc.Node
 	if t.Width == 1 {
 		// byte multiply behaves differently.
-		gc.Nodreg(&ax, t, x86.REG_AH)
-
-		gc.Nodreg(&dx, t, x86.REG_DX)
-		gmove(&ax, &dx)
+		var byteAH, byteDX gc.Node
+		gc.Nodreg(&byteAH, t, x86.REG_AH)
+		gc.Nodreg(&byteDX, t, x86.REG_DX)
+		gmove(&byteAH, &byteDX)
 	}
-
-	gc.Nodreg(&dx, t, x86.REG_DX)
 	gmove(&dx, res)
+
+	restx(&ax, &oldax)
+	restx(&dx, &olddx)
 }
 
 /*
@@ -389,7 +391,7 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
  *	res = nl << nr
  *	res = nl >> nr
  */
-func cgen_shift(op int, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
+func cgen_shift(op gc.Op, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	a := optoas(op, nl.Type)
 
 	if nr.Op == gc.OLITERAL {
@@ -508,7 +510,7 @@ func cgen_shift(op int, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
  * there is no 2-operand byte multiply instruction so
  * we do a full-width multiplication and truncate afterwards.
  */
-func cgen_bmul(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) bool {
+func cgen_bmul(op gc.Op, nl *gc.Node, nr *gc.Node, res *gc.Node) bool {
 	if optoas(op, nl.Type) != x86.AIMULB {
 		return false
 	}

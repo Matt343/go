@@ -356,15 +356,12 @@ func relocsym(s *LSym) {
 		// We need to be able to reference dynimport symbols when linking against
 		// shared libraries, and Solaris needs it always
 		if HEADTYPE != obj.Hsolaris && r.Sym != nil && r.Sym.Type == obj.SDYNIMPORT && !DynlinkingGo() {
-			Diag("unhandled relocation for %s (type %d rtype %d)", r.Sym.Name, r.Sym.Type, r.Type)
+			if !(Thearch.Thechar == '9' && Linkmode == LinkExternal && r.Sym.Name == ".TOC.") {
+				Diag("unhandled relocation for %s (type %d rtype %d)", r.Sym.Name, r.Sym.Type, r.Type)
+			}
 		}
 		if r.Sym != nil && r.Sym.Type != obj.STLSBSS && !r.Sym.Reachable {
 			Diag("unreachable sym in relocation: %s %s", s.Name, r.Sym.Name)
-		}
-
-		// Android emulates runtime.tlsg as a regular variable.
-		if r.Type == obj.R_TLS && goos == "android" {
-			r.Type = obj.R_ADDR
 		}
 
 		switch r.Type {
@@ -385,28 +382,10 @@ func relocsym(s *LSym) {
 				Diag("unknown reloc %d", r.Type)
 			}
 
-		case obj.R_TLS:
-			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd {
-				r.Done = 0
-				r.Sym = Ctxt.Tlsg
-				r.Xsym = Ctxt.Tlsg
-				r.Xadd = r.Add
-				o = r.Add
-				break
-			}
-			if Linkmode == LinkInternal && Iself && Thearch.Thechar == '5' {
-				panic("should no longer get here")
-				break
-			}
-
-			r.Done = 0
-			o = 0
-			if Thearch.Thechar != '6' {
-				o = r.Add
-			}
-
 		case obj.R_TLS_LE:
-			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd {
+			isAndroidX86 := goos == "android" && (Thearch.Thechar == '6' || Thearch.Thechar == '8')
+
+			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd && !isAndroidX86 {
 				r.Done = 0
 				if r.Sym == nil {
 					r.Sym = Ctxt.Tlsg
@@ -429,7 +408,7 @@ func relocsym(s *LSym) {
 				// related to the fact that our own TLS storage happens
 				// to take up 8 bytes.
 				o = 8 + r.Sym.Value
-			} else if Iself || Ctxt.Headtype == obj.Hplan9 || Ctxt.Headtype == obj.Hdarwin {
+			} else if Iself || Ctxt.Headtype == obj.Hplan9 || Ctxt.Headtype == obj.Hdarwin || isAndroidX86 {
 				o = int64(Ctxt.Tlsoffset) + r.Add
 			} else if Ctxt.Headtype == obj.Hwindows {
 				o = r.Add
@@ -438,7 +417,9 @@ func relocsym(s *LSym) {
 			}
 
 		case obj.R_TLS_IE:
-			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd {
+			isAndroidX86 := goos == "android" && (Thearch.Thechar == '6' || Thearch.Thechar == '8')
+
+			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd && !isAndroidX86 {
 				r.Done = 0
 				if r.Sym == nil {
 					r.Sym = Ctxt.Tlsg

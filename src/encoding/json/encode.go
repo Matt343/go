@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/base64"
+	"fmt"
 	"math"
 	"reflect"
 	"runtime"
@@ -448,12 +449,10 @@ func textMarshalerEncoder(e *encodeState, v reflect.Value, quoted bool) {
 	}
 	m := v.Interface().(encoding.TextMarshaler)
 	b, err := m.MarshalText()
-	if err == nil {
-		_, err = e.stringBytes(b)
-	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err})
 	}
+	e.stringBytes(b)
 }
 
 func addrTextMarshalerEncoder(e *encodeState, v reflect.Value, quoted bool) {
@@ -464,12 +463,10 @@ func addrTextMarshalerEncoder(e *encodeState, v reflect.Value, quoted bool) {
 	}
 	m := va.Interface().(encoding.TextMarshaler)
 	b, err := m.MarshalText()
-	if err == nil {
-		_, err = e.stringBytes(b)
-	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err})
 	}
+	e.stringBytes(b)
 }
 
 func boolEncoder(e *encodeState, v reflect.Value, quoted bool) {
@@ -533,8 +530,13 @@ var (
 func stringEncoder(e *encodeState, v reflect.Value, quoted bool) {
 	if v.Type() == numberType {
 		numStr := v.String()
+		// In Go1.5 the empty string encodes to "0", while this is not a valid number literal
+		// we keep compatibility so check validity after this.
 		if numStr == "" {
 			numStr = "0" // Number's zero-val
+		}
+		if !isValidNumber(numStr) {
+			e.error(fmt.Errorf("json: invalid number literal %q", numStr))
 		}
 		e.WriteString(numStr)
 		return
@@ -783,7 +785,7 @@ func (sv stringValues) Less(i, j int) bool { return sv.get(i) < sv.get(j) }
 func (sv stringValues) get(i int) string   { return sv[i].String() }
 
 // NOTE: keep in sync with stringBytes below.
-func (e *encodeState) string(s string) (int, error) {
+func (e *encodeState) string(s string) int {
 	len0 := e.Len()
 	e.WriteByte('"')
 	start := 0
@@ -855,11 +857,11 @@ func (e *encodeState) string(s string) (int, error) {
 		e.WriteString(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Len() - len0, nil
+	return e.Len() - len0
 }
 
 // NOTE: keep in sync with string above.
-func (e *encodeState) stringBytes(s []byte) (int, error) {
+func (e *encodeState) stringBytes(s []byte) int {
 	len0 := e.Len()
 	e.WriteByte('"')
 	start := 0
@@ -931,7 +933,7 @@ func (e *encodeState) stringBytes(s []byte) (int, error) {
 		e.Write(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Len() - len0, nil
+	return e.Len() - len0
 }
 
 // A field represents a single field found in a struct.
@@ -1025,7 +1027,7 @@ func typeFields(t reflect.Type) []field {
 			// Scan f.typ for fields to include.
 			for i := 0; i < f.typ.NumField(); i++ {
 				sf := f.typ.Field(i)
-				if sf.PkgPath != "" { // unexported
+				if sf.PkgPath != "" && !sf.Anonymous { // unexported
 					continue
 				}
 				tag := sf.Tag.Get("json")

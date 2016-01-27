@@ -44,8 +44,7 @@ var (
 	rebuildall       bool
 	defaultclang     bool
 
-	sflag bool // build static binaries
-	vflag int  // verbosity
+	vflag int // verbosity
 )
 
 // The known architectures.
@@ -55,6 +54,8 @@ var okgoarch = []string{
 	"amd64p32",
 	"arm",
 	"arm64",
+	"mips64",
+	"mips64le",
 	"ppc64",
 	"ppc64le",
 }
@@ -321,18 +322,15 @@ func findgoversion() string {
 
 // isGitRepo reports whether the working directory is inside a Git repository.
 func isGitRepo() bool {
-	p := ".git"
-	for {
-		fi, err := os.Stat(p)
-		if os.IsNotExist(err) {
-			p = filepath.Join("..", p)
-			continue
-		}
-		if err != nil || !fi.IsDir() {
-			return false
-		}
-		return true
+	// NB: simply checking the exit code of `git rev-parse --git-dir` would
+	// suffice here, but that requires deviating from the infrastructure
+	// provided by `run`.
+	gitDir := chomp(run(goroot, 0, "git", "rev-parse", "--git-dir"))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(goroot, gitDir)
 	}
+	fi, err := os.Stat(gitDir)
+	return err == nil && fi.IsDir()
 }
 
 /*
@@ -462,7 +460,7 @@ var deptab = []struct {
 	{"cmd/go", []string{
 		"zdefaultcc.go",
 	}},
-	{"runtime", []string{
+	{"runtime/internal/sys", []string{
 		"zversion.go",
 	}},
 }
@@ -619,13 +617,15 @@ func install(dir string) {
 	}
 
 	// For package runtime, copy some files into the work space.
-	if dir == "runtime" {
+	if dir == "runtime" || strings.HasPrefix(dir, "runtime/internal/") {
 		xmkdirall(pathf("%s/pkg/include", goroot))
 		// For use by assembly and C files.
 		copyfile(pathf("%s/pkg/include/textflag.h", goroot),
 			pathf("%s/src/runtime/textflag.h", goroot), 0)
 		copyfile(pathf("%s/pkg/include/funcdata.h", goroot),
 			pathf("%s/src/runtime/funcdata.h", goroot), 0)
+		copyfile(pathf("%s/pkg/include/asm_ppc64x.h", goroot),
+			pathf("%s/src/runtime/asm_ppc64x.h", goroot), 0)
 	}
 
 	// Generate any missing files; regenerate existing ones.
@@ -906,6 +906,8 @@ func clean() {
 		// Remove installed packages and tools.
 		xremoveall(pathf("%s/pkg/%s_%s", goroot, gohostos, gohostarch))
 		xremoveall(pathf("%s/pkg/%s_%s", goroot, goos, goarch))
+		xremoveall(pathf("%s/pkg/%s_%s_race", goroot, gohostos, gohostarch))
+		xremoveall(pathf("%s/pkg/%s_%s_race", goroot, goos, goarch))
 		xremoveall(tooldir)
 
 		// Remove cached version info.
@@ -978,7 +980,6 @@ func cmdenv() {
 // stopping at having installed the go_bootstrap command.
 func cmdbootstrap() {
 	flag.BoolVar(&rebuildall, "a", rebuildall, "rebuild all")
-	flag.BoolVar(&sflag, "s", sflag, "build static binaries")
 	xflagparse(0)
 
 	if isdir(pathf("%s/src/pkg", goroot)) {
@@ -1098,11 +1099,15 @@ func checkCC() {
 	if !needCC() {
 		return
 	}
-	if _, err := exec.Command(defaultcc, "--help").Output(); err != nil {
+	if output, err := exec.Command(defaultcc, "--help").CombinedOutput(); err != nil {
+		outputHdr := ""
+		if len(output) > 0 {
+			outputHdr = "\nCommand output:\n\n"
+		}
 		fatal("cannot invoke C compiler %q: %v\n\n"+
 			"Go needs a system C compiler for use with cgo.\n"+
 			"To set a C compiler, export CC=the-compiler.\n"+
-			"To disable cgo, export CGO_ENABLED=0.\n", defaultcc, err)
+			"To disable cgo, export CGO_ENABLED=0.\n%s%s", defaultcc, err, outputHdr, output)
 	}
 }
 
@@ -1126,7 +1131,6 @@ func defaulttarg() string {
 
 // Install installs the list of packages named on the command line.
 func cmdinstall() {
-	flag.BoolVar(&sflag, "s", sflag, "build static binaries")
 	xflagparse(-1)
 
 	if flag.NArg() == 0 {
