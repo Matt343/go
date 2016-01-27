@@ -179,6 +179,10 @@ func NewParam(pos token.Pos, pkg *Package, name string, typ Type) *Var {
 	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, used: true} // parameters are always 'used'
 }
 
+func NewTypeParam(pos token.Pos, pkg *Package, name string, typ Type, variance ast.Variance) *TypeParameter {
+	return &TypeParameter{*NewTypeName(pos, pkg, name, typ), variance}
+}
+
 func NewField(pos token.Pos, pkg *Package, name string, typ Type, anonymous bool) *Var {
 	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, anonymous: anonymous, isField: true}
 }

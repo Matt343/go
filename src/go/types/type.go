@@ -5,6 +5,7 @@
 package types
 
 import "sort"
+import "go/ast"
 
 // TODO(gri) Revisit factory functions - make sure they have all relevant parameters.
 
@@ -94,11 +95,16 @@ func (b *Basic) Name() string { return b.name }
 
 // A GenericType is parameterized by one or more other types.
 type GenericType struct {
-	typeParameters []Type
+	typeParameters []*TypeParameter
+}
+
+type TypeParameter struct {
+	TypeName
+	variance ast.Variance
 }
 
 // NewGenericType returns a new generic type for the given type parameters
-func NewGenericType(types ...Type) *GenericType {
+func NewGenericType(types ...*TypeParameter) *GenericType {
 	return &GenericType{types}
 }
 
@@ -108,41 +114,41 @@ func (g *GenericType) NumParameters() int {
 }
 
 // TypeParameter returns the i'th type parameters for 0 <= i < NumParameters().
-func (g *GenericType) TypeParameter(i int) Type {
+func (g *GenericType) TypeParameter(i int) *TypeParameter {
 	return g.typeParameters[i]
 }
 
 // SetTypeParameters is a convenience method to set all of the
 // type parameters of a generic type at once.
-func (g *GenericType) SetTypeParameters(types ...Type) {
+func (g *GenericType) SetTypeParameters(types ...*TypeParameter) {
 	g.typeParameters = types
 }
 
 // An Array represents an array type.
 type Array struct {
-	len int64
-	GenericType
+	len  int64
+	elem Type
 }
 
 // NewArray returns a new array type for the given element type and length.
-func NewArray(elem Type, len int64) *Array { return &Array{len, *NewGenericType(elem)} }
+func NewArray(elem Type, len int64) *Array { return &Array{len, elem} }
 
 // Len returns the length of array a.
 func (a *Array) Len() int64 { return a.len }
 
 // Elem returns element type of array a.
-func (a *Array) Elem() Type { return a.TypeParameter(0) }
+func (a *Array) Elem() Type { return a.elem }
 
 // A Slice represents a slice type.
 type Slice struct {
-	GenericType
+	elem Type
 }
 
 // NewSlice returns a new slice type for the given element type.
-func NewSlice(elem Type) *Slice { return &Slice{*NewGenericType(elem)} }
+func NewSlice(elem Type) *Slice { return &Slice{elem} }
 
 // Elem returns the element type of slice s.
-func (s *Slice) Elem() Type { return s.TypeParameter(0) }
+func (s *Slice) Elem() Type { return s.elem }
 
 // A Struct represents a struct type.
 type Struct struct {
@@ -150,6 +156,7 @@ type Struct struct {
 	tags   []string // field tags; nil if there are no tags
 	// TODO(gri) access to offsets is not threadsafe - fix this
 	offsets []int64 // field offsets in bytes, lazily initialized
+	GenericType
 }
 
 // NewStruct returns a new struct with the given fields and corresponding field tags.
@@ -157,6 +164,11 @@ type Struct struct {
 // only as long as required to hold the tag with the largest index i. Consequently,
 // if no field has a tag, tags may be nil.
 func NewStruct(fields []*Var, tags []string) *Struct {
+	return NewGenericStruct(nil, fields, tags)
+}
+
+// NewGenericStruct returns a new generic struct with the given fields and corresponding field tags.
+func NewGenericStruct(typeParams []*TypeParameter, fields []*Var, tags []string) *Struct {
 	var fset objset
 	for _, f := range fields {
 		if f.name != "_" && fset.insert(f) != nil {
@@ -166,7 +178,7 @@ func NewStruct(fields []*Var, tags []string) *Struct {
 	if len(tags) > len(fields) {
 		panic("more tags than fields")
 	}
-	return &Struct{fields: fields, tags: tags}
+	return &Struct{fields: fields, tags: tags, GenericType: *NewGenericType(typeParams...)}
 }
 
 // NumFields returns the number of fields in the struct (including blank and anonymous fields).
@@ -185,14 +197,14 @@ func (s *Struct) Tag(i int) string {
 
 // A Pointer represents a pointer type.
 type Pointer struct {
-	GenericType
+	elem Type
 }
 
 // NewPointer returns a new pointer type for the given element (base) type.
-func NewPointer(elem Type) *Pointer { return &Pointer{*NewGenericType(elem)} }
+func NewPointer(elem Type) *Pointer { return &Pointer{elem} }
 
 // Elem returns the element type for the given pointer p.
-func (p *Pointer) Elem() Type { return p.TypeParameter(0) }
+func (p *Pointer) Elem() Type { return p.elem }
 
 // A Tuple represents an ordered list of variables; a nil *Tuple is a valid (empty) tuple.
 // Tuples are used as components of signatures and to represent the type of multiple
@@ -231,6 +243,7 @@ type Signature struct {
 	params   *Tuple // (incoming) parameters from left to right; or nil
 	results  *Tuple // (outgoing) results from left to right; or nil
 	variadic bool   // true if the last parameter's type is of the form ...T (or string, for append built-in only)
+	GenericType
 }
 
 // NewSignature returns a new function type for the given receiver, parameters,
@@ -238,6 +251,10 @@ type Signature struct {
 // is variadic, it must have at least one parameter, and the last parameter
 // must be of unnamed slice type.
 func NewSignature(recv *Var, params, results *Tuple, variadic bool) *Signature {
+	return NewGenericSignature(recv, nil, params, results, variadic)
+}
+
+func NewGenericSignature(recv *Var, typeParams []*TypeParameter, params, results *Tuple, variadic bool) *Signature {
 	if variadic {
 		n := params.Len()
 		if n == 0 {
@@ -247,7 +264,7 @@ func NewSignature(recv *Var, params, results *Tuple, variadic bool) *Signature {
 			panic("types.NewSignature: variadic parameter must be of unnamed slice type")
 		}
 	}
-	return &Signature{nil, recv, params, results, variadic}
+	return &Signature{nil, recv, params, results, variadic, *NewGenericType(typeParams...)}
 }
 
 // Recv returns the receiver of signature s (if a method), or nil if a
@@ -363,24 +380,24 @@ func (t *Interface) Complete() *Interface {
 
 // A Map represents a map type.
 type Map struct {
-	GenericType
+	key, elem Type
 }
 
 // NewMap returns a new map for the given key and element types.
 func NewMap(key, elem Type) *Map {
-	return &Map{*NewGenericType(key, elem)}
+	return &Map{key, elem}
 }
 
 // Key returns the key type of map m.
-func (m *Map) Key() Type { return m.TypeParameter(0) }
+func (m *Map) Key() Type { return m.key }
 
 // Elem returns the element type of map m.
-func (m *Map) Elem() Type { return m.TypeParameter(1) }
+func (m *Map) Elem() Type { return m.elem }
 
 // A Chan represents a channel type.
 type Chan struct {
-	dir ChanDir
-	GenericType
+	dir  ChanDir
+	elem Type
 }
 
 // A ChanDir value indicates a channel direction.
@@ -395,14 +412,14 @@ const (
 
 // NewChan returns a new channel type for the given direction and element type.
 func NewChan(dir ChanDir, elem Type) *Chan {
-	return &Chan{dir, *NewGenericType(elem)}
+	return &Chan{dir, elem}
 }
 
 // Dir returns the direction of channel c.
 func (c *Chan) Dir() ChanDir { return c.dir }
 
 // Elem returns the element type of channel c.
-func (c *Chan) Elem() Type { return c.TypeParameter(0) }
+func (c *Chan) Elem() Type { return c.elem }
 
 // A Named represents a named type.
 type Named struct {

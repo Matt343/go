@@ -360,11 +360,11 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr) {
 			params = sig.params.vars
 		}
 		x.mode = value
-		x.typ = &Signature{
-			params:   NewTuple(append([]*Var{NewVar(token.NoPos, check.pkg, "", x.typ)}, params...)...),
-			results:  sig.results,
-			variadic: sig.variadic,
-		}
+		x.typ = NewSignature(
+			nil,
+			NewTuple(append([]*Var{NewVar(token.NoPos, check.pkg, "", x.typ)}, params...)...),
+			sig.results, sig.variadic,
+		)
 
 		check.addDeclDep(m)
 

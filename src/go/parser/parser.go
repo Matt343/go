@@ -1387,10 +1387,46 @@ func (p *parser) parseIndexOrSlice(x ast.Expr) ast.Expr {
 	return &ast.IndexExpr{X: x, Lbrack: lbrack, Index: index[0], Rbrack: rbrack}
 }
 
+func (p *parser) parseTypeArguments() (lbrack token.Pos, args []ast.Expr, rbrack token.Pos) {
+	lbrack = token.NoPos
+	rbrack = token.NoPos
+	if p.trace {
+		defer un(trace(p, "TypeArguments"))
+	}
+	if p.tok != token.LSS {
+		return
+	}
+
+	lbrack = p.expect(token.LSS)
+	p.exprLev++
+	shr := token.NoPos
+	for p.tok != token.GTR && p.tok != token.EOF {
+		arg, shr := p.parseType(true)
+		args = append(args, arg)
+		if shr.IsValid() {
+			break
+		}
+		if !p.atComma("type argument list", token.GTR) {
+			break
+		}
+		p.next()
+	}
+	p.exprLev--
+	if !shr.IsValid() {
+		rbrack = p.expectClosing(token.GTR, "type argument list")
+	} else {
+		rbrack = shr
+	}
+
+	return
+}
+
 func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
 	if p.trace {
 		defer un(trace(p, "CallOrConversion"))
 	}
+
+	lbrack, typeArgs, rbrack := p.parseTypeArguments()
 
 	lparen := p.expect(token.LPAREN)
 	p.exprLev++
@@ -1410,7 +1446,16 @@ func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
 	p.exprLev--
 	rparen := p.expectClosing(token.RPAREN, "argument list")
 
-	return &ast.CallExpr{Fun: fun, Lparen: lparen, Args: list, Ellipsis: ellipsis, Rparen: rparen}
+	return &ast.CallExpr{
+		Fun:      fun,
+		Lparen:   lparen,
+		Args:     list,
+		Ellipsis: ellipsis,
+		Rparen:   rparen,
+		Lbrack:   lbrack,
+		TypeArgs: typeArgs,
+		Rbrack:   rbrack,
+	}
 }
 
 func (p *parser) parseValue(keyOk bool) ast.Expr {

@@ -142,10 +142,22 @@ func (check *Checker) typ(e ast.Expr) Type {
 
 // funcType type-checks a function or method type.
 func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast.FuncType) {
-	scope := NewScope(check.scope, token.NoPos, token.NoPos, "function")
+	parentScope := check.scope
+	if ftyp.TypeParams != nil {
+		parentScope = NewScope(check.scope, token.NoPos, token.NoPos, "function type parameters")
+		check.recordScope(ftyp.TypeParams, parentScope)
+	}
+
+	scope := NewScope(parentScope, token.NoPos, token.NoPos, "function")
 	check.recordScope(ftyp, scope)
 
 	recvList, _ := check.collectParams(scope, recvPar, false)
+
+	typeParams := make([]*TypeParameter, 0)
+	if ftyp.TypeParams != nil {
+		typeParams = check.collectTypeParams(parentScope, ftyp.TypeParams)
+		check.scope = parentScope
+	}
 	params, variadic := check.collectParams(scope, ftyp.Params, true)
 	results, _ := check.collectParams(scope, ftyp.Results, false)
 
@@ -201,7 +213,12 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 	sig.scope = scope
 	sig.params = NewTuple(params...)
 	sig.results = NewTuple(results...)
+	sig.typeParameters = typeParams
 	sig.variadic = variadic
+
+	if ftyp.TypeParams != nil {
+		check.scope = parentScope.Parent()
+	}
 }
 
 // typExprInternal drives type checking of types.
@@ -254,13 +271,13 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 			typ := new(Array)
 			def.setUnderlying(typ)
 			typ.len = check.arrayLength(e.Len)
-			typ.SetTypeParameters(check.typExpr(e.Elt, nil, path))
+			typ.elem = check.typExpr(e.Elt, nil, path)
 			return typ
 
 		} else {
 			typ := new(Slice)
 			def.setUnderlying(typ)
-			typ.SetTypeParameters(check.typ(e.Elt))
+			typ.elem = check.typ(e.Elt)
 			return typ
 		}
 
@@ -273,7 +290,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 	case *ast.StarExpr:
 		typ := new(Pointer)
 		def.setUnderlying(typ)
-		typ.SetTypeParameters(check.typ(e.X))
+		typ.elem = check.typ(e.X)
 		return typ
 
 	case *ast.FuncType:
@@ -292,7 +309,8 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		typ := new(Map)
 		def.setUnderlying(typ)
 
-		typ.SetTypeParameters(check.typ(e.Key), check.typ(e.Value))
+		typ.key = check.typ(e.Key)
+		typ.elem = check.typ(e.Value)
 
 		// spec: "The comparison operators == and != must be fully defined
 		// for operands of the key type; thus the key type must not be a
@@ -326,7 +344,7 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		}
 
 		typ.dir = dir
-		typ.SetTypeParameters(check.typ(e.Value))
+		typ.elem = check.typ(e.Value)
 		return typ
 
 	default:
@@ -434,6 +452,41 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 	if variadic && len(params) > 0 {
 		last := params[len(params)-1]
 		last.typ = NewSlice(last.typ)
+	}
+
+	return
+}
+
+func (check *Checker) collectTypeParams(scope *Scope, list *ast.TypeParameterList) (params []*TypeParameter) {
+	if list == nil {
+		return
+	}
+
+	for _, field := range list.List {
+		ftype := field.TypeBound
+		if t, _ := ftype.(*ast.Ellipsis); t != nil {
+			check.invalidAST(field.Pos(), "... not permitted")
+			// ignore ... and continue
+		}
+		// typ := check.typ(ftype)
+		// The parser ensures that f.Tag is nil and we don't
+		// care if a constructed AST contains a non-nil tag.
+		if len(field.Names) > 0 {
+			// named parameter
+			for _, name := range field.Names {
+				if name.Name == "" {
+					check.invalidAST(name.Pos(), "anonymous type parameter")
+					// ok to continue
+				}
+				par := NewTypeParam(name.Pos(), check.pkg, name.Name, nil, field.Variance)
+				check.typeDecl(&par.TypeName, ftype, nil, nil)
+				check.declare(scope, name, &par.TypeName, scope.parent.pos)
+				params = append(params, par)
+			}
+		} else {
+			// anonymous parameter
+			check.invalidAST(ftype.Pos(), "anonymous type parameter")
+		}
 	}
 
 	return

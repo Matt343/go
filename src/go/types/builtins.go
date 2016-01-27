@@ -640,7 +640,7 @@ func makeSig(res Type, args ...Type) *Signature {
 		assert(!isUntyped(res))
 		result = NewTuple(NewVar(token.NoPos, nil, "", res))
 	}
-	return &Signature{params: params, results: result}
+	return NewSignature(nil, params, result, false)
 }
 
 // implicitArrayDeref returns A if typ is of the form *A and A is an array;

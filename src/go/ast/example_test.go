@@ -109,32 +109,34 @@ func main() {
 	//     30  .  .  .  .  .  .  .  .  NamePos: 4:2
 	//     31  .  .  .  .  .  .  .  .  Name: "println"
 	//     32  .  .  .  .  .  .  .  }
-	//     33  .  .  .  .  .  .  .  Lparen: 4:9
-	//     34  .  .  .  .  .  .  .  Args: []ast.Expr (len = 1) {
-	//     35  .  .  .  .  .  .  .  .  0: *ast.BasicLit {
-	//     36  .  .  .  .  .  .  .  .  .  ValuePos: 4:10
-	//     37  .  .  .  .  .  .  .  .  .  Kind: STRING
-	//     38  .  .  .  .  .  .  .  .  .  Value: "\"Hello, World!\""
-	//     39  .  .  .  .  .  .  .  .  }
-	//     40  .  .  .  .  .  .  .  }
-	//     41  .  .  .  .  .  .  .  Ellipsis: -
-	//     42  .  .  .  .  .  .  .  Rparen: 4:25
-	//     43  .  .  .  .  .  .  }
-	//     44  .  .  .  .  .  }
-	//     45  .  .  .  .  }
-	//     46  .  .  .  .  Rbrace: 5:1
-	//     47  .  .  .  }
-	//     48  .  .  }
-	//     49  .  }
-	//     50  .  Scope: *ast.Scope {
-	//     51  .  .  Objects: map[string]*ast.Object (len = 1) {
-	//     52  .  .  .  "main": *(obj @ 11)
-	//     53  .  .  }
-	//     54  .  }
-	//     55  .  Unresolved: []*ast.Ident (len = 1) {
-	//     56  .  .  0: *(obj @ 29)
-	//     57  .  }
-	//     58  }
+	//     33  .  .  .  .  .  .  .  Lbrack: -
+	//     34  .  .  .  .  .  .  .  Rbrack: -
+	//     35  .  .  .  .  .  .  .  Lparen: 4:9
+	//     36  .  .  .  .  .  .  .  Args: []ast.Expr (len = 1) {
+	//     37  .  .  .  .  .  .  .  .  0: *ast.BasicLit {
+	//     38  .  .  .  .  .  .  .  .  .  ValuePos: 4:10
+	//     39  .  .  .  .  .  .  .  .  .  Kind: STRING
+	//     40  .  .  .  .  .  .  .  .  .  Value: "\"Hello, World!\""
+	//     41  .  .  .  .  .  .  .  .  }
+	//     42  .  .  .  .  .  .  .  }
+	//     43  .  .  .  .  .  .  .  Ellipsis: -
+	//     44  .  .  .  .  .  .  .  Rparen: 4:25
+	//     45  .  .  .  .  .  .  }
+	//     46  .  .  .  .  .  }
+	//     47  .  .  .  .  }
+	//     48  .  .  .  .  Rbrace: 5:1
+	//     49  .  .  .  }
+	//     50  .  .  }
+	//     51  .  }
+	//     52  .  Scope: *ast.Scope {
+	//     53  .  .  Objects: map[string]*ast.Object (len = 1) {
+	//     54  .  .  .  "main": *(obj @ 11)
+	//     55  .  .  }
+	//     56  .  }
+	//     57  .  Unresolved: []*ast.Ident (len = 1) {
+	//     58  .  .  0: *(obj @ 29)
+	//     59  .  }
+	//     60  }
 }
 
 // This example illustrates how to remove a variable declaration

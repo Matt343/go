@@ -442,6 +442,9 @@ func TestScopesInfo(t *testing.T) {
 		{`package p20; var s int; func _(a []int) { for i, x := range a { s += x; _ = i } }`, []string{
 			"file:", "func:a", "range:i x", "block:",
 		}},
+		{`package p21; func _<T interface{}>(a T) {}`, []string{
+			"file:", "type params:T", "func:a",
+		}},
 	}
 
 	for _, test := range tests {
@@ -477,6 +480,8 @@ func TestScopesInfo(t *testing.T) {
 				kind = "for"
 			case *ast.RangeStmt:
 				kind = "range"
+			case *ast.TypeParameterList:
+				kind = "type params"
 			}
 
 			// look for matching scope description

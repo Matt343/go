@@ -1,0 +1,48 @@
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// generic types
+
+package generics0
+
+import "fmt"
+
+type Op interface {
+     Foo(a string) int
+}
+
+type S struct {
+     F int
+}
+
+func (s *S) Foo(a string) int {
+     return len(a) + s.F
+}
+
+func test() int {
+     s := &S{3}
+     return ident<S>(s).Foo("test")
+}
+
+func ident<T interface{}>(a T) T {
+     return a
+}
+
+func scope<T interface{}>(fmt string, a fmt.State) T {
+     return a
+}
+
+var a T /*ERROR "undeclared"*/
+
+func inter<T Op>(a T, b string, c int) int {
+     return a.Foo(b) + c
+}
+
+func inter2<T Op>(a T, b int, c int) int {
+     return a.Foo(b /*ERROR "cannot use b"*/ ) + c
+}
+
+func inter3<T Op>(a T) {
+     a/*ERROR "invalid operation"*/.Bar()
+}

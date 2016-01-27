@@ -398,6 +398,9 @@ type (
 	// A CallExpr node represents an expression followed by an argument list.
 	CallExpr struct {
 		Fun      Expr      // function expression
+		Lbrack   token.Pos // position of "<"; optional
+		TypeArgs []Expr    // function type arguments; or nil
+		Rbrack   token.Pos // position of ">"; optional
 		Lparen   token.Pos // position of "("
 		Args     []Expr    // function arguments; or nil
 		Ellipsis token.Pos // position of "...", if any

@@ -130,6 +130,22 @@ func TestParseExpr(t *testing.T) {
 		}
 	}
 
+	// a valid generic function call
+	src = "foo(arg)<T>"
+	x, err = ParseExpr(src)
+	if err != nil {
+		t.Errorf("ParseExpr(%q): %v", src, err)
+	}
+
+	// sanity check
+	if y, ok := x.(*ast.CallExpr); !ok {
+		t.Errorf("ParseExpr(%q) got %T, want *ast.CallExpr", src, x)
+	} else {
+		if y.TypeArgs == nil || len(y.TypeArgs) == 0 {
+			t.Errorf("ParseExpr(%q) has no type arguments", src)
+		}
+	}
+
 	// a valid generic struct type
 	src = "struct <param -Bound> { Field1, Field2 Type; Field3 param }"
 	x, err = ParseExpr(src)
