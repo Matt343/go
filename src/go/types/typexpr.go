@@ -213,7 +213,7 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 	sig.scope = scope
 	sig.params = NewTuple(params...)
 	sig.results = NewTuple(results...)
-	sig.typeParameters = typeParams
+	sig.typeParams = typeParams
 	sig.variadic = variadic
 
 	if ftyp.TypeParams != nil {

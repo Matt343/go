@@ -95,34 +95,13 @@ func (b *Basic) Info() BasicInfo { return b.info }
 func (b *Basic) Name() string { return b.name }
 
 // A GenericType is parameterized by one or more other types.
-type GenericType struct {
-	typeParameters []*TypeParameter
+type GenericType interface {
+	TypeParams() []*TypeParameter
 }
 
 type TypeParameter struct {
 	TypeName
 	variance ast.Variance
-}
-
-// NewGenericType returns a new generic type for the given type parameters
-func NewGenericType(types ...*TypeParameter) *GenericType {
-	return &GenericType{types}
-}
-
-// NumParameters is the number of type parameters.
-func (g *GenericType) NumParameters() int {
-	return len(g.typeParameters)
-}
-
-// TypeParameter returns the i'th type parameters for 0 <= i < NumParameters().
-func (g *GenericType) TypeParameter(i int) *TypeParameter {
-	return g.typeParameters[i]
-}
-
-// SetTypeParameters is a convenience method to set all of the
-// type parameters of a generic type at once.
-func (g *GenericType) SetTypeParameters(types ...*TypeParameter) {
-	g.typeParameters = types
 }
 
 // An Array represents an array type.
@@ -154,10 +133,10 @@ func (s *Slice) Elem() Type { return s.elem }
 // A Struct represents a struct type.
 type Struct struct {
 	fields      []*Var
-	tags        []string  // field tags; nil if there are no tags
-	offsets     []int64   // field offsets in bytes, lazily initialized
-	offsetsOnce sync.Once // for threadsafe lazy initialization of offsets
-	GenericType
+	tags        []string         // field tags; nil if there are no tags
+	offsets     []int64          // field offsets in bytes, lazily initialized
+	offsetsOnce sync.Once        // for threadsafe lazy initialization of offsets
+	typeParams  []*TypeParameter // type parameters for the struct; or nil
 }
 
 // NewStruct returns a new struct with the given fields and corresponding field tags.
@@ -179,7 +158,7 @@ func NewGenericStruct(typeParams []*TypeParameter, fields []*Var, tags []string)
 	if len(tags) > len(fields) {
 		panic("more tags than fields")
 	}
-	return &Struct{fields: fields, tags: tags, GenericType: *NewGenericType(typeParams...)}
+	return &Struct{fields: fields, tags: tags, typeParams: typeParams}
 }
 
 // NumFields returns the number of fields in the struct (including blank and anonymous fields).
@@ -194,6 +173,10 @@ func (s *Struct) Tag(i int) string {
 		return s.tags[i]
 	}
 	return ""
+}
+
+func (s *Struct) TypeParams() []*TypeParameter {
+	return s.typeParams
 }
 
 // A Pointer represents a pointer type.
@@ -239,12 +222,12 @@ type Signature struct {
 	// and store it in the Func Object) because when type-checking a function
 	// literal we call the general type checker which returns a general Type.
 	// We then unpack the *Signature and use the scope for the literal body.
-	scope    *Scope // function scope, present for package-local signatures
-	recv     *Var   // nil if not a method
-	params   *Tuple // (incoming) parameters from left to right; or nil
-	results  *Tuple // (outgoing) results from left to right; or nil
-	variadic bool   // true if the last parameter's type is of the form ...T (or string, for append built-in only)
-	GenericType
+	scope      *Scope           // function scope, present for package-local signatures
+	recv       *Var             // nil if not a method
+	params     *Tuple           // (incoming) parameters from left to right; or nil
+	results    *Tuple           // (outgoing) results from left to right; or nil
+	variadic   bool             // true if the last parameter's type is of the form ...T (or string, for append built-in only)
+	typeParams []*TypeParameter // type paramters for signature; or nil
 }
 
 // NewSignature returns a new function type for the given receiver, parameters,
@@ -265,7 +248,7 @@ func NewGenericSignature(recv *Var, typeParams []*TypeParameter, params, results
 			panic("types.NewSignature: variadic parameter must be of unnamed slice type")
 		}
 	}
-	return &Signature{nil, recv, params, results, variadic, *NewGenericType(typeParams...)}
+	return &Signature{nil, recv, params, results, variadic, typeParams}
 }
 
 // Recv returns the receiver of signature s (if a method), or nil if a
@@ -284,6 +267,8 @@ func (s *Signature) Results() *Tuple { return s.results }
 
 // Variadic reports whether the signature s is variadic.
 func (s *Signature) Variadic() bool { return s.variadic }
+
+func (s *Signature) TypeParams() []*TypeParameter { return s.typeParams }
 
 // An Interface represents an interface type.
 type Interface struct {
