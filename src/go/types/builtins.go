@@ -124,7 +124,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 				return
 			}
 			arg(x, i)
-		}, nargs)
+		}, nargs, nil)
 		// ok to continue even if check.arguments reported errors
 
 		x.mode = value

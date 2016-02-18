@@ -245,6 +245,8 @@ type TypeParameter struct {
 	Comment   *CommentGroup // line comments; or nil
 }
 
+func (p *TypeParameter) exprNode() {}
+
 func (p *TypeParameter) Pos() token.Pos {
 	if len(p.Names) > 0 {
 		return p.Names[0].Pos()

@@ -1417,6 +1417,7 @@ func (p *parser) parseTypeArguments() (lbrack token.Pos, args []ast.Expr, rbrack
 	} else {
 		rbrack = shr
 	}
+	p.expect(token.COMMA)
 
 	return
 }
@@ -1425,10 +1426,10 @@ func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
 	if p.trace {
 		defer un(trace(p, "CallOrConversion"))
 	}
+	lparen := p.expect(token.LPAREN)
 
 	lbrack, typeArgs, rbrack := p.parseTypeArguments()
 
-	lparen := p.expect(token.LPAREN)
 	p.exprLev++
 	var list []ast.Expr
 	var ellipsis token.Pos

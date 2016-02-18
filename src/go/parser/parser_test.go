@@ -131,7 +131,7 @@ func TestParseExpr(t *testing.T) {
 	}
 
 	// a valid generic function call
-	src = "foo(arg)<T>"
+	src = "foo(<T>, arg)"
 	x, err = ParseExpr(src)
 	if err != nil {
 		t.Errorf("ParseExpr(%q): %v", src, err)

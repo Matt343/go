@@ -100,8 +100,17 @@ type GenericType interface {
 }
 
 type TypeParameter struct {
-	TypeName
-	variance ast.Variance
+	bound    Type         // type bound for this parameter
+	methods  []*Func      // methods declared for this type (not the method set of this type)
+	variance ast.Variance // variance of this type parameter.
+	context  Type         // the signature, struct, or interface that this is a parameter to
+}
+
+func NewTypeParameter(obj *TypeName, bound Type, methods []*Func, variance ast.Variance, context Type) *Named {
+	named := NewNamed(obj, bound, methods)
+	named.variance = variance
+	named.context = context
+	return named
 }
 
 // An Array represents an array type.
@@ -133,10 +142,10 @@ func (s *Slice) Elem() Type { return s.elem }
 // A Struct represents a struct type.
 type Struct struct {
 	fields      []*Var
-	tags        []string         // field tags; nil if there are no tags
-	offsets     []int64          // field offsets in bytes, lazily initialized
-	offsetsOnce sync.Once        // for threadsafe lazy initialization of offsets
-	typeParams  []*TypeParameter // type parameters for the struct; or nil
+	tags        []string    // field tags; nil if there are no tags
+	offsets     []int64     // field offsets in bytes, lazily initialized
+	offsetsOnce sync.Once   // for threadsafe lazy initialization of offsets
+	typeParams  []*TypeName // type parameters for the struct; or nil
 }
 
 // NewStruct returns a new struct with the given fields and corresponding field tags.
@@ -148,7 +157,7 @@ func NewStruct(fields []*Var, tags []string) *Struct {
 }
 
 // NewGenericStruct returns a new generic struct with the given fields and corresponding field tags.
-func NewGenericStruct(typeParams []*TypeParameter, fields []*Var, tags []string) *Struct {
+func NewGenericStruct(typeParams []*TypeName, fields []*Var, tags []string) *Struct {
 	var fset objset
 	for _, f := range fields {
 		if f.name != "_" && fset.insert(f) != nil {
@@ -175,7 +184,7 @@ func (s *Struct) Tag(i int) string {
 	return ""
 }
 
-func (s *Struct) TypeParams() []*TypeParameter {
+func (s *Struct) TypeParams() []*TypeName {
 	return s.typeParams
 }
 
@@ -222,12 +231,12 @@ type Signature struct {
 	// and store it in the Func Object) because when type-checking a function
 	// literal we call the general type checker which returns a general Type.
 	// We then unpack the *Signature and use the scope for the literal body.
-	scope      *Scope           // function scope, present for package-local signatures
-	recv       *Var             // nil if not a method
-	params     *Tuple           // (incoming) parameters from left to right; or nil
-	results    *Tuple           // (outgoing) results from left to right; or nil
-	variadic   bool             // true if the last parameter's type is of the form ...T (or string, for append built-in only)
-	typeParams []*TypeParameter // type paramters for signature; or nil
+	scope      *Scope      // function scope, present for package-local signatures
+	recv       *Var        // nil if not a method
+	params     *Tuple      // (incoming) parameters from left to right; or nil
+	results    *Tuple      // (outgoing) results from left to right; or nil
+	variadic   bool        // true if the last parameter's type is of the form ...T (or string, for append built-in only)
+	typeParams []*TypeName // type paramters for signature; or nil
 }
 
 // NewSignature returns a new function type for the given receiver, parameters,
@@ -238,7 +247,7 @@ func NewSignature(recv *Var, params, results *Tuple, variadic bool) *Signature {
 	return NewGenericSignature(recv, nil, params, results, variadic)
 }
 
-func NewGenericSignature(recv *Var, typeParams []*TypeParameter, params, results *Tuple, variadic bool) *Signature {
+func NewGenericSignature(recv *Var, typeParams []*TypeName, params, results *Tuple, variadic bool) *Signature {
 	if variadic {
 		n := params.Len()
 		if n == 0 {
@@ -268,7 +277,7 @@ func (s *Signature) Results() *Tuple { return s.results }
 // Variadic reports whether the signature s is variadic.
 func (s *Signature) Variadic() bool { return s.variadic }
 
-func (s *Signature) TypeParams() []*TypeParameter { return s.typeParams }
+func (s *Signature) TypeParams() []*TypeName { return s.typeParams }
 
 // An Interface represents an interface type.
 type Interface struct {
@@ -412,6 +421,8 @@ type Named struct {
 	obj        *TypeName // corresponding declared object
 	underlying Type      // possibly a *Named during setup; never a *Named once set up completely
 	methods    []*Func   // methods declared for this type (not the method set of this type)
+	context    Type
+	variance   ast.Variance
 }
 
 // NewNamed returns a new named type for the given type name, underlying type, and associated methods.
@@ -458,26 +469,55 @@ func (t *Named) AddMethod(m *Func) {
 
 // Implementations for Type methods.
 
-func (t *Basic) Underlying() Type     { return t }
-func (t *Array) Underlying() Type     { return t }
-func (t *Slice) Underlying() Type     { return t }
-func (t *Struct) Underlying() Type    { return t }
-func (t *Pointer) Underlying() Type   { return t }
-func (t *Tuple) Underlying() Type     { return t }
-func (t *Signature) Underlying() Type { return t }
-func (t *Interface) Underlying() Type { return t }
-func (t *Map) Underlying() Type       { return t }
-func (t *Chan) Underlying() Type      { return t }
-func (t *Named) Underlying() Type     { return t.underlying }
+func (t *Basic) Underlying() Type         { return t }
+func (t *Array) Underlying() Type         { return t }
+func (t *Slice) Underlying() Type         { return t }
+func (t *Struct) Underlying() Type        { return t }
+func (t *Pointer) Underlying() Type       { return t }
+func (t *Tuple) Underlying() Type         { return t }
+func (t *Signature) Underlying() Type     { return t }
+func (t *Interface) Underlying() Type     { return t }
+func (t *Map) Underlying() Type           { return t }
+func (t *Chan) Underlying() Type          { return t }
+func (t *Named) Underlying() Type         { return t.underlying }
+func (t *TypeParameter) Underlying() Type { return t.bound }
 
-func (t *Basic) String() string     { return TypeString(t, nil) }
-func (t *Array) String() string     { return TypeString(t, nil) }
-func (t *Slice) String() string     { return TypeString(t, nil) }
-func (t *Struct) String() string    { return TypeString(t, nil) }
-func (t *Pointer) String() string   { return TypeString(t, nil) }
-func (t *Tuple) String() string     { return TypeString(t, nil) }
-func (t *Signature) String() string { return TypeString(t, nil) }
-func (t *Interface) String() string { return TypeString(t, nil) }
-func (t *Map) String() string       { return TypeString(t, nil) }
-func (t *Chan) String() string      { return TypeString(t, nil) }
-func (t *Named) String() string     { return TypeString(t, nil) }
+func (t *Basic) String() string         { return TypeString(t, nil) }
+func (t *Array) String() string         { return TypeString(t, nil) }
+func (t *Slice) String() string         { return TypeString(t, nil) }
+func (t *Struct) String() string        { return TypeString(t, nil) }
+func (t *Pointer) String() string       { return TypeString(t, nil) }
+func (t *Tuple) String() string         { return TypeString(t, nil) }
+func (t *Signature) String() string     { return TypeString(t, nil) }
+func (t *Interface) String() string     { return TypeString(t, nil) }
+func (t *Map) String() string           { return TypeString(t, nil) }
+func (t *Chan) String() string          { return TypeString(t, nil) }
+func (t *Named) String() string         { return TypeString(t, nil) }
+func (t *TypeParameter) String() string { return TypeString(t, nil) }
+
+// func copyVars(in []*Var) []*Var {
+// 	out := make([]*Var, len(in))
+// 	for i, v := range in {
+// 		out[i] = v.Copy()
+// 	}
+// 	return out
+// }
+
+// func copyTypeParams(in []*TypeParameter) []*TypeParameter {
+// 	out := make([]*TypeParameter, len(in))
+// 	for i, v := range in {
+// 		out[i] = v.Copy()
+// 	}
+// 	return out
+// }
+
+// func (t *Basic) DeepCopy() Type { return &Basic{t.kind, t.info, t.name} }
+// func (t *Array) DeepCopy() Type { return &Array{t.len, t.elem.DeepCopy()} }
+// func (t *Slice) DeepCopy() Type { return &Slice{t.elem.DeepCopy()} }
+// func (t *Struct) DeepCopy() Type {
+// 	tags := make([]string, len(t.tags))
+// 	copy(tags, t.tags)
+// 	offsets := make([]int64, len(t.offsets))
+// 	copy(offsets, t.offsets)
+// 	return &Struct{copyVars(t.fields), tags, offsets, nil, copyTypeParams(t.typeParams)}
+// }

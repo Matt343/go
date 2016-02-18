@@ -12,7 +12,19 @@ type Op interface {
      Foo(a string) int
 }
 
+type Op2 interface {
+     Foo(a int) string
+}
+
 type S struct {
+     F int
+}
+
+type A struct {
+     F int
+}
+
+type Other struct {
      F int
 }
 
@@ -20,9 +32,24 @@ func (s *S) Foo(a string) int {
      return len(a) + s.F
 }
 
+func (t *A) Foo(a string) int {
+     return len(a) - t.F
+}
+
 func test() int {
      s := &S{3}
-     return ident<S>(s).Foo("test")
+     apply(<*S>, func(a *S) *S { return a; }, s)
+     return ident(<*S>, s).Foo("test")
+}
+
+func typeArgs() {
+     s := &S{1}
+     // o := &Other{2}
+     a := &A{3}
+     inter(<*S>, s, "test", 1)
+     inter(<int /*ERROR "cannot use int"*/>, 1, "bad", 3)
+     inter(<*S>, a /*ERROR "cannot use a"*/, "bad", 1)
+     inter(<*S, int>/*ERROR "wrong number of type arguments"*/, s, "none", 0)
 }
 
 func ident<T interface{}>(a T) T {
@@ -45,4 +72,25 @@ func inter2<T Op>(a T, b int, c int) int {
 
 func inter3<T Op>(a T) {
      a/*ERROR "invalid operation"*/.Bar()
+}
+
+func inter4<T Op2>(a T) {
+     a.Foo(1)
+}
+
+func apply<T Op>(f func(a T) T, b T) T {
+     return f(b)
+}
+
+func mapSlice<A, B interface{}>(f func(a A) B, list []A) []B {
+     newList := make([]B, len(list))
+     for i, e := range list {
+         newList[i] = f(e)
+     }
+     return newList
+}
+
+func mapTest() []int {
+     words := []string{"cat", "dog", "bird"}
+     return mapSlice(<string, int>, func (w string) int { return len(w); }, words)
 }

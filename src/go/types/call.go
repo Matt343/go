@@ -61,6 +61,11 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 			return statement
 		}
 
+		var typeAliases TypeAliases
+		if e.TypeArgs != nil && len(e.TypeArgs) > 0 {
+			typeAliases = check.typeArguments(e, sig)
+		}
+
 		arg, n, _ := unpack(func(x *operand, i int) { check.multiExpr(x, e.Args[i]) }, len(e.Args), false)
 		if arg == nil {
 			x.mode = invalid
@@ -68,7 +73,7 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 			return statement
 		}
 
-		check.arguments(x, e, sig, arg, n)
+		check.arguments(x, e, sig, arg, n, &typeAliases)
 
 		// determine result
 		switch sig.results.Len() {
@@ -76,10 +81,11 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 			x.mode = novalue
 		case 1:
 			x.mode = value
-			x.typ = sig.results.vars[0].typ // unpack tuple
+			t := sig.results.vars[0].typ // unpack tuple
+			x.typ = check.substituteTypes(sig, t, &typeAliases, nil)
 		default:
 			x.mode = value
-			x.typ = sig.results
+			x.typ = check.substituteTypesTuple(sig, sig.results, &typeAliases, nil)
 		}
 		x.expr = e
 		check.hasCallOrRecv = true
@@ -87,6 +93,8 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 		return statement
 	}
 }
+
+type TypeAliases map[*TypeName]Type
 
 // use type-checks each argument.
 // Useful to make sure expressions are evaluated
@@ -178,7 +186,7 @@ func unpack(get getter, n int, allowCommaOk bool) (getter, int, bool) {
 
 // arguments checks argument passing for the call with the given signature.
 // The arg function provides the operand for the i'th argument.
-func (check *Checker) arguments(x *operand, call *ast.CallExpr, sig *Signature, arg getter, n int) {
+func (check *Checker) arguments(x *operand, call *ast.CallExpr, sig *Signature, arg getter, n int, aliases *TypeAliases) {
 	if call.Ellipsis.IsValid() {
 		// last argument is of the form x...
 		if !sig.variadic {
@@ -202,7 +210,7 @@ func (check *Checker) arguments(x *operand, call *ast.CallExpr, sig *Signature, 
 			if i == n-1 && call.Ellipsis.IsValid() {
 				ellipsis = call.Ellipsis
 			}
-			check.argument(call.Fun, sig, i, x, ellipsis)
+			check.argument(call.Fun, sig, i, x, ellipsis, aliases)
 		}
 	}
 
@@ -218,9 +226,33 @@ func (check *Checker) arguments(x *operand, call *ast.CallExpr, sig *Signature, 
 	}
 }
 
+func (check *Checker) typeArguments(call *ast.CallExpr, sig *Signature) TypeAliases {
+	aliases := make(TypeAliases)
+	sigParams := sig.TypeParams()
+	if sigParams == nil || len(sigParams) == 0 {
+		check.errorf(call.Lbrack, "function with signature %s does not accept type parameters", sig)
+		return aliases
+	}
+	if len(call.TypeArgs) != len(sigParams) {
+		check.errorf(call.Rbrack, "wrong number of type arguments in call to %s", call.Fun)
+		return aliases
+	}
+	for i, arg := range call.TypeArgs {
+		typeParam := sigParams[i]
+		var argType operand
+		check.exprOrType(&argType, arg)
+		if reason := ""; !argType.assignableTo(check.conf, typeParam.typ.Underlying(), &reason) {
+			check.errorf(arg.Pos(), "cannot use %s as %s in %s: %s", arg, typeParam, call.Fun, reason)
+		}
+		aliases[typeParam] = argType.typ
+	}
+
+	return aliases
+}
+
 // argument checks passing of argument x to the i'th parameter of the given signature.
 // If ellipsis is valid, the argument is followed by ... at that position in the call.
-func (check *Checker) argument(fun ast.Expr, sig *Signature, i int, x *operand, ellipsis token.Pos) {
+func (check *Checker) argument(fun ast.Expr, sig *Signature, i int, x *operand, ellipsis token.Pos, aliases *TypeAliases) {
 	check.singleValue(x)
 	if x.mode == invalid {
 		return
@@ -260,7 +292,9 @@ func (check *Checker) argument(fun ast.Expr, sig *Signature, i int, x *operand, 
 		typ = typ.(*Slice).Elem()
 	}
 
-	check.assignment(x, typ, check.sprintf("argument to %s", fun))
+	sub := check.substituteTypes(sig, typ, aliases, nil)
+
+	check.assignment(x, sub, check.sprintf("argument to %s", fun))
 }
 
 func (check *Checker) selector(x *operand, e *ast.SelectorExpr) {

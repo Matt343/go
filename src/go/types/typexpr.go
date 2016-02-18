@@ -153,9 +153,9 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 
 	recvList, _ := check.collectParams(scope, recvPar, false)
 
-	typeParams := make([]*TypeParameter, 0)
+	typeParams := make([]*TypeName, 0)
 	if ftyp.TypeParams != nil {
-		typeParams = check.collectTypeParams(parentScope, ftyp.TypeParams)
+		typeParams = check.collectTypeParams(sig, parentScope, ftyp.TypeParams)
 		check.scope = parentScope
 	}
 	params, variadic := check.collectParams(scope, ftyp.Params, true)
@@ -460,7 +460,7 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 	return
 }
 
-func (check *Checker) collectTypeParams(scope *Scope, list *ast.TypeParameterList) (params []*TypeParameter) {
+func (check *Checker) collectTypeParams(sig *Signature, scope *Scope, list *ast.TypeParameterList) (params []*TypeName) {
 	if list == nil {
 		return
 	}
@@ -481,9 +481,23 @@ func (check *Checker) collectTypeParams(scope *Scope, list *ast.TypeParameterLis
 					check.invalidAST(name.Pos(), "anonymous type parameter")
 					// ok to continue
 				}
-				par := NewTypeParam(name.Pos(), check.pkg, name.Name, nil, field.Variance)
-				check.typeDecl(&par.TypeName, ftype, nil, nil)
-				check.declare(scope, name, &par.TypeName, scope.parent.pos)
+
+				par := NewTypeName(name.Pos(), check.pkg, name.Name, nil)
+				check.typeDecl(par, ftype, nil, nil)
+				if named, _ := par.typ.(*Named); named != nil {
+					named.context = sig
+					named.variance = field.Variance
+				}
+
+				// bound := check.typ(ftype)
+				// typ := NewTypeParameter(bound, nil, field.Variance, sig)
+				// par := NewTypeName(name.Pos(), check.pkg, name.Name, typ)
+
+				// check.recordTypeAndValue(field, typexpr, typ, nil)
+
+				// // check.addMethodDecls(par)
+
+				check.declare(scope, name, par, scope.parent.pos)
 				params = append(params, par)
 			}
 		} else {
